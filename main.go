@@ -78,6 +78,9 @@ func main() {
 		}
 		c.JSON(200, responseBody)
 	})
+	server.GET("/sysinfo", func(c *gin.Context) {
+		c.JSON(200, controller.SysInfo(c))
+	})
 	file := server.Group("/file")
 	{
 		file.GET("/list", func(c *gin.Context) {
