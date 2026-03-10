@@ -1,17 +1,7 @@
 # WebSSH
 
 一个基于 Go + WebSocket 的 Web SSH 终端，支持密码和密钥认证，带有炫酷的毛玻璃 UI。
-
-## 功能特性
-
-- 基于 xterm.js 的完整终端模拟
-- 支持密码和 SSH 密钥两种认证方式
-- SFTP 文件上传/下载
-- 终端窗口自适应大小
-- 毛玻璃 (Glassmorphism) UI 设计
-- 粒子动画背景
-- 动态按钮与过渡效果
-- 支持 Docker Compose 一键部署
+## 作者 棍勇
 
 ## 快速开始
 
@@ -90,32 +80,17 @@ go run . -a admin:password
 4. 点击 **「连接终端」** 按钮
 5. 连接成功后自动进入全屏终端界面
 
-### 终端操作
-
-- 终端支持所有标准 SSH 操作，和本地终端体验一致
-- 窗口大小会自动适应浏览器窗口
-- 顶部工具栏按钮：
-  - 🔄 **重新连接** — 断开当前连接并重新建立
-  - ⏻ **断开连接** — 返回登录页面
-- 按 `Esc` 键也可快速断开连接回到登录页
-
-### 键盘快捷键
-
-| 快捷键 | 功能 |
-|--------|------|
-| `Esc` | 断开连接，返回登录页 |
-
-## 配置参数
-
-| 参数 | 环境变量 | 默认值 | 说明 |
-|------|----------|--------|------|
-| `-p` | `port` | 8008 | 服务端口 |
-| `-a` | `authInfo` | 空 | Web 登录验证，格式 `user:pass` |
-| `-t` | — | 120 | SSH 连接超时时间（分钟） |
-| `-s` | `savePass` | true | 是否保存密码 |
-
-## 技术栈
-
-- **后端**: Go + Gin + gorilla/websocket + golang.org/x/crypto/ssh
 - **前端**: 原生 HTML/CSS/JS + xterm.js
 - **部署**: Docker + Docker Compose
+
+- ## 效果图
+<img width="1280" height="675" alt="image" src="https://github.com/user-attachments/assets/f3ef06c5-9479-4123-9c93-9b4ac69f007f" />
+<img width="1280" height="415" alt="image" src="https://github.com/user-attachments/assets/2bcf4d98-3a95-4d43-867b-f4af5fd94948" />
+<img width="1280" height="512" alt="image" src="https://github.com/user-attachments/assets/5040cc7d-bd31-44c9-9b94-4382fb59764e" />
+
+<img width="369" height="634" alt="image" src="https://github.com/user-attachments/assets/b6978860-c82e-413a-ab3e-3e29c4776a9a" />
+<img width="521" height="737" alt="image" src="https://github.com/user-attachments/assets/e8dfbd1c-87ae-495d-a8bb-cabf714f0878" />
+<img width="1042" height="249" alt="image" src="https://github.com/user-attachments/assets/b6d99e78-563e-4572-b094-1ebf36dd440a" />
+
+
+
