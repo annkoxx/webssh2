@@ -225,6 +225,18 @@ input[type="number"]{-moz-appearance:textfield}
 .color-custom input[type="color"]::-webkit-color-swatch{border:none;border-radius:2px}
 .color-custom span{font-size:10px;color:var(--t3)}
 
+/* ==================== RIGHT-CLICK MENU ==================== */
+.ctx-menu{display:none;position:fixed;z-index:200;padding:5px 0;min-width:140px;flex-direction:column}
+.ctx-menu.show{display:flex;animation:fi .15s ease}
+.ctx-item{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:12px;color:var(--t1);cursor:pointer;transition:all var(--tr);white-space:nowrap}
+.ctx-item:hover{background:rgba(0,212,255,.1);color:var(--c1)}
+.ctx-item svg{flex-shrink:0;color:var(--t2)}
+.ctx-item:hover svg{color:var(--c1)}
+.ctx-sep{height:1px;background:var(--brd);margin:3px 8px}
+.copy-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:60px;padding:6px 16px;border-radius:20px;background:rgba(0,255,136,.15);border:1px solid rgba(0,255,136,.25);color:var(--ok);font-size:11px;font-weight:500;z-index:300;animation:ctIn .3s ease,ctOut .3s ease 1s forwards;pointer-events:none}
+@keyframes ctIn{0%{opacity:0;transform:translateX(-50%) translateY(10px)}100%{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes ctOut{to{opacity:0;transform:translateX(-50%) translateY(-10px)}}
+
 /* ==================== PROXY PANEL ==================== */
 .proxy-panel{display:none;flex-direction:column;gap:8px;padding:10px;background:rgba(123,47,247,.05);border:1px solid rgba(123,47,247,.15);border-radius:var(--rs);animation:fi .3s ease}
 .proxy-panel.show{display:flex}

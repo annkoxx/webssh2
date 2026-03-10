@@ -247,6 +247,7 @@ function connectSession(session) {
         if (!got) {
             got = true;
             showToast(session.hostname + ' 连接成功', 'success');
+            setupAutoCopy(session);
             session.heartbeat = setInterval(function () { if (ws.readyState === 1) ws.send('ping'); }, 30000);
             if (document.getElementById('enableSysInfo').checked) {
                 fetchSysInfoFor(session);
@@ -517,6 +518,97 @@ function sftpUpload() {
 }
 
 document.getElementById('sftpPath').addEventListener('keydown', function (e) { if (e.key === 'Enter') sftpGo(); });
+
+// ==================== Copy / Paste / Context Menu ====================
+function termCopy() {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    var sel = sessions[activeIdx].term.getSelection();
+    if (!sel) { showToast('没有选中内容', 'info'); return; }
+    navigator.clipboard.writeText(sel).then(function () {
+        showCopyToast();
+    }).catch(function () {
+        fallbackCopy(sel);
+    });
+    hideCtxMenu();
+}
+
+function termPaste() {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    navigator.clipboard.readText().then(function (text) {
+        if (text && sessions[activeIdx].ws && sessions[activeIdx].ws.readyState === 1) {
+            sessions[activeIdx].ws.send(text);
+            sessions[activeIdx].term.focus();
+        }
+    }).catch(function () {
+        showToast('无法读取剪贴板，请使用 Ctrl+Shift+V', 'info');
+    });
+    hideCtxMenu();
+}
+
+function termSelectAll() {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    sessions[activeIdx].term.selectAll();
+    hideCtxMenu();
+}
+
+function termClear() {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    sessions[activeIdx].term.clear();
+    hideCtxMenu();
+}
+
+function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); showCopyToast(); } catch (e) { }
+    document.body.removeChild(ta);
+}
+
+function showCopyToast() {
+    var d = document.createElement('div');
+    d.className = 'copy-toast';
+    d.textContent = '已复制到剪贴板';
+    document.body.appendChild(d);
+    setTimeout(function () { d.remove(); }, 1400);
+}
+
+// Auto-copy on selection
+function setupAutoCopy(session) {
+    session.term.onSelectionChange(function () {
+        var sel = session.term.getSelection();
+        if (sel && sel.length > 0) {
+            navigator.clipboard.writeText(sel).then(function () {
+                showCopyToast();
+            }).catch(function () {
+                fallbackCopy(sel);
+            });
+        }
+    });
+}
+
+// Right-click context menu
+document.getElementById('terminalContainer').addEventListener('contextmenu', function (e) {
+    e.preventDefault();
+    var menu = document.getElementById('ctxMenu');
+    menu.style.left = Math.min(e.clientX, window.innerWidth - 160) + 'px';
+    menu.style.top = Math.min(e.clientY, window.innerHeight - 160) + 'px';
+    menu.classList.add('show');
+});
+
+document.addEventListener('click', function () { hideCtxMenu(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hideCtxMenu(); });
+
+function hideCtxMenu() {
+    document.getElementById('ctxMenu').classList.remove('show');
+}
+
+// Ctrl+Shift+C / Ctrl+Shift+V shortcuts
+document.addEventListener('keydown', function (e) {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    if (e.ctrlKey && e.shiftKey && e.key === 'C') { e.preventDefault(); termCopy(); }
+    if (e.ctrlKey && e.shiftKey && e.key === 'V') { e.preventDefault(); termPaste(); }
+});
 
 // ==================== Font Size ====================
 var FONT_KEY = 'webssh_fontsize';
