@@ -172,12 +172,13 @@ function createSession(hostname, port, username, sshInfo) {
     termDiv.id = 'term_' + id;
     document.getElementById('terminalContainer').appendChild(termDiv);
 
-    var isMobile = window.innerWidth <= 520;
+    var savedFont = getCurrentFontSize();
+    var savedColors = getSavedColors();
     var t = new Terminal({
         cursorBlink: true, cursorStyle: 'bar',
-        fontSize: isMobile ? 13 : 15,
+        fontSize: savedFont,
         fontFamily: "'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace",
-        theme: { background: 'rgba(10,10,26,0)', foreground: '#e8e8f0', cursor: '#00d4ff', cursorAccent: '#0a0a1a', selectionBackground: 'rgba(0,212,255,.25)', black: '#1a1a2e', red: '#ff006e', green: '#00ff88', yellow: '#ffbe0b', blue: '#00d4ff', magenta: '#7b2ff7', cyan: '#00d4ff', white: '#e8e8f0', brightBlack: '#3a3a5e', brightRed: '#ff4488', brightGreen: '#33ffaa', brightYellow: '#ffdd33', brightBlue: '#33ddff', brightMagenta: '#9955ff', brightCyan: '#33ddff', brightWhite: '#fff' },
+        theme: { background: savedColors.bg === '#0a0a1a' ? 'rgba(10,10,26,0)' : savedColors.bg, foreground: savedColors.fg, cursor: savedColors.cursor, cursorAccent: '#0a0a1a', selectionBackground: 'rgba(0,212,255,.25)', black: '#1a1a2e', red: '#ff006e', green: '#00ff88', yellow: '#ffbe0b', blue: '#00d4ff', magenta: '#7b2ff7', cyan: '#00d4ff', white: '#e8e8f0', brightBlack: '#3a3a5e', brightRed: '#ff4488', brightGreen: '#33ffaa', brightYellow: '#ffdd33', brightBlue: '#33ddff', brightMagenta: '#9955ff', brightCyan: '#33ddff', brightWhite: '#fff' },
         allowTransparency: true, scrollback: 10000
     });
     var fa = new FitAddon.FitAddon();
@@ -209,6 +210,7 @@ function switchTab(idx) {
     var s = sessions[idx];
     setTimeout(function () { try { s.fitAddon.fit(); s.term.focus(); } catch (e) { } }, 100);
     updateMetricsForActive();
+    updateFontSizeLabel();
 }
 
 function renderTabs() {
@@ -515,6 +517,125 @@ function sftpUpload() {
 }
 
 document.getElementById('sftpPath').addEventListener('keydown', function (e) { if (e.key === 'Enter') sftpGo(); });
+
+// ==================== Font Size ====================
+var FONT_KEY = 'webssh_fontsize';
+var COLOR_KEY = 'webssh_colors';
+
+function getCurrentFontSize() {
+    var saved = parseInt(localStorage.getItem(FONT_KEY));
+    return saved || (window.innerWidth <= 520 ? 13 : 15);
+}
+
+function changeFontSize(delta) {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    var s = sessions[activeIdx];
+    var cur = s.term.options.fontSize || 15;
+    var nv = Math.max(8, Math.min(30, cur + delta));
+    s.term.options.fontSize = nv;
+    localStorage.setItem(FONT_KEY, nv);
+    document.getElementById('fontSizeLabel').textContent = nv;
+    try { s.fitAddon.fit(); } catch (e) { }
+    if (s.ws && s.ws.readyState === 1) s.ws.send('resize:' + s.term.rows + ':' + s.term.cols);
+}
+
+function updateFontSizeLabel() {
+    if (activeIdx >= 0 && sessions[activeIdx]) {
+        document.getElementById('fontSizeLabel').textContent = sessions[activeIdx].term.options.fontSize || 15;
+    }
+}
+
+// ==================== Color Picker ====================
+var FG_COLORS = ['#e8e8f0','#ffffff','#00ff88','#00d4ff','#ffbe0b','#ff006e','#7b2ff7','#ff4488','#33ffaa','#33ddff','#ffdd33','#9955ff','#f97316','#a3e635','#e879f9','#94a3b8'];
+var BG_COLORS = ['#0a0a1a','#000000','#1a1a2e','#0d1117','#1e1e2e','#282a36','#002b36','#2e3440','#1a1b26','#161616','#0c0c1d','#121212','#0f172a','#18181b','#27272a','#1c1917'];
+var CURSOR_COLORS = ['#00d4ff','#ffffff','#00ff88','#ffbe0b','#ff006e','#7b2ff7','#ff4488','#f97316','#e879f9','#a3e635'];
+
+function toggleColorPicker() {
+    var p = document.getElementById('colorPanel');
+    if (p.classList.contains('show')) {
+        p.classList.remove('show');
+    } else {
+        renderSwatches();
+        p.classList.add('show');
+    }
+}
+
+function renderSwatches() {
+    var colors = getSavedColors();
+    renderSwatchGroup('fgSwatches', FG_COLORS, colors.fg, applyFgColor);
+    renderSwatchGroup('bgSwatches', BG_COLORS, colors.bg, applyBgColor);
+    renderSwatchGroup('cursorSwatches', CURSOR_COLORS, colors.cursor, applyCursorColor);
+}
+
+function renderSwatchGroup(containerId, palette, active, onClick) {
+    var el = document.getElementById(containerId);
+    el.innerHTML = palette.map(function (c) {
+        var cls = c.toLowerCase() === active.toLowerCase() ? ' active' : '';
+        return '<div class="color-swatch' + cls + '" style="background:' + c + '" onclick="event.stopPropagation();(' + onClick.name + ')(\\'' + c + '\\')" title="' + c + '"></div>';
+    }).join('');
+}
+
+function getSavedColors() {
+    try { var c = JSON.parse(localStorage.getItem(COLOR_KEY)); if (c) return c; } catch (e) { }
+    return { fg: '#e8e8f0', bg: '#0a0a1a', cursor: '#00d4ff' };
+}
+
+function saveColors(fg, bg, cursor) {
+    localStorage.setItem(COLOR_KEY, JSON.stringify({ fg: fg, bg: bg, cursor: cursor }));
+}
+
+function applyFgColor(color) {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    sessions[activeIdx].term.options.theme = Object.assign({}, sessions[activeIdx].term.options.theme, { foreground: color });
+    var c = getSavedColors(); c.fg = color; saveColors(c.fg, c.bg, c.cursor);
+    document.getElementById('fgCustomColor').value = color;
+    renderSwatches();
+}
+
+function applyBgColor(color) {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    sessions[activeIdx].term.options.theme = Object.assign({}, sessions[activeIdx].term.options.theme, { background: color });
+    document.querySelector('.term-body').style.background = color;
+    var c = getSavedColors(); c.bg = color; saveColors(c.fg, c.bg, c.cursor);
+    document.getElementById('bgCustomColor').value = color;
+    renderSwatches();
+}
+
+function applyCursorColor(color) {
+    if (activeIdx < 0 || !sessions[activeIdx]) return;
+    sessions[activeIdx].term.options.theme = Object.assign({}, sessions[activeIdx].term.options.theme, { cursor: color });
+    var c = getSavedColors(); c.cursor = color; saveColors(c.fg, c.bg, c.cursor);
+    document.getElementById('cursorCustomColor').value = color;
+    renderSwatches();
+}
+
+function resetTermColors() {
+    localStorage.removeItem(COLOR_KEY);
+    if (activeIdx >= 0 && sessions[activeIdx]) {
+        sessions[activeIdx].term.options.theme = {
+            background: 'rgba(10,10,26,0)', foreground: '#e8e8f0', cursor: '#00d4ff', cursorAccent: '#0a0a1a',
+            selectionBackground: 'rgba(0,212,255,.25)', black: '#1a1a2e', red: '#ff006e', green: '#00ff88',
+            yellow: '#ffbe0b', blue: '#00d4ff', magenta: '#7b2ff7', cyan: '#00d4ff', white: '#e8e8f0',
+            brightBlack: '#3a3a5e', brightRed: '#ff4488', brightGreen: '#33ffaa', brightYellow: '#ffdd33',
+            brightBlue: '#33ddff', brightMagenta: '#9955ff', brightCyan: '#33ddff', brightWhite: '#fff'
+        };
+        document.querySelector('.term-body').style.background = '';
+    }
+    document.getElementById('fgCustomColor').value = '#e8e8f0';
+    document.getElementById('bgCustomColor').value = '#0a0a1a';
+    document.getElementById('cursorCustomColor').value = '#00d4ff';
+    renderSwatches();
+    showToast('已重置默认颜色', 'info');
+}
+
+// Close color picker on outside click
+document.addEventListener('click', function (e) {
+    var panel = document.getElementById('colorPanel');
+    var btn = document.getElementById('colorPickerBtn');
+    if (panel && panel.classList.contains('show') && !panel.contains(e.target) && !btn.contains(e.target)) {
+        panel.classList.remove('show');
+    }
+});
 
 // ==================== Init ====================
 renderConnBookmarks();

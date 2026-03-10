@@ -205,6 +205,26 @@ textarea{padding:9px 10px;resize:vertical;min-height:60px;font-family:'JetBrains
 input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type="number"]{-moz-appearance:textfield}
 
+/* ==================== FONT SIZE LABEL ==================== */
+.font-size-label{font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--c1);font-weight:600;min-width:18px;text-align:center;user-select:none}
+.topbar-sep{width:1px;height:18px;background:var(--brd);margin:0 2px;flex-shrink:0}
+
+/* ==================== COLOR PICKER ==================== */
+.color-picker-wrap{position:relative}
+.color-panel{display:none;position:absolute;top:36px;right:0;width:240px;padding:12px;z-index:50;flex-direction:column;gap:10px}
+.color-panel.show{display:flex;animation:fi .2s ease}
+.color-section{display:flex;flex-direction:column;gap:5px}
+.color-section label{font-size:10px;font-weight:500;color:var(--t2);text-transform:uppercase;letter-spacing:.5px}
+.color-swatches{display:flex;flex-wrap:wrap;gap:4px}
+.color-swatch{width:22px;height:22px;border-radius:4px;border:2px solid transparent;cursor:pointer;transition:all var(--tr);flex-shrink:0}
+.color-swatch:hover{transform:scale(1.15);border-color:rgba(255,255,255,.4);box-shadow:0 0 8px rgba(255,255,255,.15)}
+.color-swatch.active{border-color:var(--c1);box-shadow:0 0 8px var(--c1g)}
+.color-custom{display:flex;align-items:center;gap:6px;margin-top:2px}
+.color-custom input[type="color"]{width:28px;height:22px;border:1px solid var(--brd);border-radius:4px;background:transparent;cursor:pointer;padding:0}
+.color-custom input[type="color"]::-webkit-color-swatch-wrapper{padding:1px}
+.color-custom input[type="color"]::-webkit-color-swatch{border:none;border-radius:2px}
+.color-custom span{font-size:10px;color:var(--t3)}
+
 /* ==================== PROXY PANEL ==================== */
 .proxy-panel{display:none;flex-direction:column;gap:8px;padding:10px;background:rgba(123,47,247,.05);border:1px solid rgba(123,47,247,.15);border-radius:var(--rs);animation:fi .3s ease}
 .proxy-panel.show{display:flex}
