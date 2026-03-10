@@ -41,7 +41,11 @@ func init() {
 	if envVal, ok := os.LookupEnv("authInfo"); ok {
 		*authInfo = envVal
 	}
-	if envVal, ok := os.LookupEnv("port"); ok {
+	if envVal, ok := os.LookupEnv("PORT"); ok {
+		if b, err := strconv.Atoi(envVal); err == nil {
+			*port = b
+		}
+	} else if envVal, ok := os.LookupEnv("port"); ok {
 		if b, err := strconv.Atoi(envVal); err == nil {
 			*port = b
 		}
