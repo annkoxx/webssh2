@@ -571,8 +571,14 @@ function renderSwatchGroup(containerId, palette, active, onClick) {
     var el = document.getElementById(containerId);
     el.innerHTML = palette.map(function (c) {
         var cls = c.toLowerCase() === active.toLowerCase() ? ' active' : '';
-        return '<div class="color-swatch' + cls + '" style="background:' + c + '" onclick="event.stopPropagation();(' + onClick.name + ')(\\'' + c + '\\')" title="' + c + '"></div>';
+        return '<div class="color-swatch' + cls + '" style="background:' + c + '" data-fn="' + onClick.name + '" data-color="' + c + '" title="' + c + '"></div>';
     }).join('');
+    el.querySelectorAll('.color-swatch').forEach(function (s) {
+        s.addEventListener('click', function (e) {
+            e.stopPropagation();
+            window[this.dataset.fn](this.dataset.color);
+        });
+    });
 }
 
 function getSavedColors() {
