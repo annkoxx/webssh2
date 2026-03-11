@@ -302,6 +302,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 .ssh-tab{display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:var(--rx);background:var(--inp);border:1px solid transparent;cursor:pointer;transition:all var(--tr);white-space:nowrap;flex-shrink:0;font-size:14px;color:var(--t2);font-family:'JetBrains Mono',monospace}
 .ssh-tab:hover{background:rgba(255,255,255,.08)}
 .ssh-tab.active{background:rgba(0,212,255,.1);border-color:rgba(0,212,255,.25);color:var(--c1)}
+.ssh-tab .tab-ip{cursor:pointer;transition:color var(--tr)}
+.ssh-tab .tab-ip:hover{color:var(--c1);text-decoration:underline}
 .ssh-tab .tab-close{width:14px;height:14px;border:none;background:transparent;color:var(--t3);cursor:pointer;display:flex;align-items:center;justify-content:center;border-radius:50%;transition:all var(--tr);padding:0;font-size:0}
 .ssh-tab .tab-close:hover{background:rgba(255,0,110,.2);color:var(--err)}
 .ssh-tab .tab-close svg{width:10px;height:10px}

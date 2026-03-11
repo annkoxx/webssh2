@@ -222,7 +222,7 @@ function renderTabs() {
     bar.innerHTML = sessions.map(function (s, i) {
         var cls = i === activeIdx ? 'ssh-tab active' : 'ssh-tab';
         return '<div class="' + cls + '" onclick="switchTab(' + i + ')">' +
-            '<span>' + esc(s.hostname) + '</span>' +
+            '<span class="tab-ip" onclick="event.stopPropagation();copyIP(\'' + esc(s.hostname) + '\')" title="点击复制IP">' + esc(s.hostname) + '</span>' +
             '<button class="tab-close" onclick="event.stopPropagation();closeTab(' + i + ')">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
     }).join('');
@@ -679,6 +679,15 @@ document.addEventListener('keydown', function (e) {
     if (e.ctrlKey && e.shiftKey && e.key === 'C') { e.preventDefault(); termCopy(); }
     if (e.ctrlKey && e.shiftKey && e.key === 'V') { e.preventDefault(); termPaste(); }
 });
+
+// ==================== Copy IP ====================
+function copyIP(ip) {
+    navigator.clipboard.writeText(ip).then(function () {
+        showCopyToast();
+    }).catch(function () {
+        fallbackCopy(ip);
+    });
+}
 
 // ==================== Font Size ====================
 var FONT_KEY = 'webssh_fontsize';
