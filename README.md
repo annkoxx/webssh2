@@ -33,7 +33,16 @@ webssh.up.railway.app
 - 毛玻璃 (Glassmorphism) UI + 粒子动画背景
 - 支持 Docker Compose 一键部署
 - 移动端 / iPad 响应式适配
-- 支持  网站/192.168.0.1:22/password  快速登录
+- 支持以下 URL 格式自动登录：
+```bash
+
+URL 格式	解析结果
+你的域名/192.168.1.1:22/mypass	root@192.168.1.1:22，密码 mypass
+你的域名/192.168.1.1:2222/admin/mypass	admin@192.168.1.1:2222
+你的域名/192.168.1.1/22/mypass	root@192.168.1.1:22
+你的域名/192.168.1.1/22/admin/mypass	admin@192.168.1.1:22
+你的域名/192.168.1.1/admin/mypass	admin@192.168.1.1:22（默认端口）
+```
 ## 快速开始
 
 ### 1. 一键命令部署（推荐）
