@@ -3,6 +3,7 @@
 一个基于 Go + WebSocket 的 Web SSH 终端，支持密码和密钥认证，带有炫酷的毛玻璃 UI。
 
 ## 示例
+效果图在最底下
 #### render.com 托管
 webssh.is-a.shop
 
@@ -188,3 +189,6 @@ export default {
 
 <img width="375" height="70" alt="image" src="https://github.com/user-attachments/assets/00048723-2590-4e56-868f-3921228d1127" />
 <img width="669" height="329" alt="image" src="https://github.com/user-attachments/assets/fe2478f0-1118-4c72-b29e-1d183029936b" />
+<img width="1733" height="868" alt="image" src="https://github.com/user-attachments/assets/d6a275cc-5800-4830-8c19-870ca1e9a559" />
+<img width="208" height="336" alt="image" src="https://github.com/user-attachments/assets/b560fabd-c6d7-4566-8a88-9c95c6607025" />
+
