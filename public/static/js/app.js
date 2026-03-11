@@ -741,13 +741,13 @@ document.addEventListener('click', function (e) {
 
 // ==================== Theme ====================
 var THEME_KEY = 'webssh_theme';
-var themes = ['auto', 'dark', 'light'];
+var themes = ['dark', 'light', 'auto'];
 var themeIcons = {
-    auto: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
     dark: '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>',
-    light: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+    light: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+    auto: '<circle cx="12" cy="12" r="4" fill="none"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/><path d="M12 6a6 6 0 010 12V6z" fill="currentColor" opacity=".3"/>'
 };
-var themeLabels = { auto: '跟随系统', dark: '暗色模式', light: '亮色模式' };
+var themeLabels = { dark: '暗色模式', light: '亮色模式', auto: '跟随系统' };
 
 function applyTheme(theme) {
     if (theme === 'auto') {
@@ -769,7 +769,7 @@ function cycleTheme() {
 }
 
 function initTheme() {
-    var saved = localStorage.getItem(THEME_KEY) || 'auto';
+    var saved = localStorage.getItem(THEME_KEY) || 'dark';
     applyTheme(saved);
 }
 
