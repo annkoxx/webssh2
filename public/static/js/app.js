@@ -174,11 +174,15 @@ function createSession(hostname, port, username, sshInfo) {
 
     var savedFont = getCurrentFontSize();
     var savedColors = getSavedColors();
+    var isLight = document.documentElement.getAttribute('data-theme') === 'light' || (!document.documentElement.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: light)').matches);
+    var defaultFg = isLight ? '#1a1a2e' : '#e8e8f0';
+    var defaultBg = isLight ? 'rgba(0,0,0,0)' : 'rgba(10,10,26,0)';
+    var defaultCursor = isLight ? '#0088cc' : '#00d4ff';
     var t = new Terminal({
         cursorBlink: true, cursorStyle: 'bar',
         fontSize: savedFont,
         fontFamily: "'JetBrains Mono','Fira Code','Cascadia Code',Consolas,monospace",
-        theme: { background: savedColors.bg === '#0a0a1a' ? 'rgba(10,10,26,0)' : savedColors.bg, foreground: savedColors.fg, cursor: savedColors.cursor, cursorAccent: '#0a0a1a', selectionBackground: 'rgba(0,212,255,.25)', black: '#1a1a2e', red: '#ff006e', green: '#00ff88', yellow: '#ffbe0b', blue: '#00d4ff', magenta: '#7b2ff7', cyan: '#00d4ff', white: '#e8e8f0', brightBlack: '#3a3a5e', brightRed: '#ff4488', brightGreen: '#33ffaa', brightYellow: '#ffdd33', brightBlue: '#33ddff', brightMagenta: '#9955ff', brightCyan: '#33ddff', brightWhite: '#fff' },
+        theme: { background: savedColors.bg === '#0a0a1a' || savedColors.bg === '#e8eaf0' ? defaultBg : savedColors.bg, foreground: savedColors.fg === '#e8e8f0' || savedColors.fg === '#1a1a2e' ? defaultFg : savedColors.fg, cursor: savedColors.cursor === '#00d4ff' || savedColors.cursor === '#0088cc' ? defaultCursor : savedColors.cursor, cursorAccent: isLight ? '#e8eaf0' : '#0a0a1a', selectionBackground: 'rgba(0,136,204,.25)', black: isLight ? '#e8e8f0' : '#1a1a2e', red: '#ff006e', green: isLight ? '#008844' : '#00ff88', yellow: isLight ? '#996600' : '#ffbe0b', blue: isLight ? '#0066cc' : '#00d4ff', magenta: '#7b2ff7', cyan: isLight ? '#0088aa' : '#00d4ff', white: isLight ? '#1a1a2e' : '#e8e8f0', brightBlack: isLight ? '#999' : '#3a3a5e', brightRed: '#ff4488', brightGreen: isLight ? '#00aa55' : '#33ffaa', brightYellow: isLight ? '#aa7700' : '#ffdd33', brightBlue: isLight ? '#0088ff' : '#33ddff', brightMagenta: '#9955ff', brightCyan: isLight ? '#00aacc' : '#33ddff', brightWhite: isLight ? '#000' : '#fff' },
         allowTransparency: true, scrollback: 10000
     });
     var fa = new FitAddon.FitAddon();
@@ -735,6 +739,41 @@ document.addEventListener('click', function (e) {
     }
 });
 
+// ==================== Theme ====================
+var THEME_KEY = 'webssh_theme';
+var themes = ['auto', 'dark', 'light'];
+var themeIcons = {
+    auto: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>',
+    dark: '<path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>',
+    light: '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>'
+};
+var themeLabels = { auto: '跟随系统', dark: '暗色模式', light: '亮色模式' };
+
+function applyTheme(theme) {
+    if (theme === 'auto') {
+        document.documentElement.removeAttribute('data-theme');
+    } else {
+        document.documentElement.setAttribute('data-theme', theme);
+    }
+    var icon = document.getElementById('themeIcon');
+    if (icon) icon.innerHTML = themeIcons[theme] || themeIcons.auto;
+}
+
+function cycleTheme() {
+    var cur = localStorage.getItem(THEME_KEY) || 'auto';
+    var idx = themes.indexOf(cur);
+    var next = themes[(idx + 1) % themes.length];
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+    showToast(themeLabels[next], 'info');
+}
+
+function initTheme() {
+    var saved = localStorage.getItem(THEME_KEY) || 'auto';
+    applyTheme(saved);
+}
+
 // ==================== Init ====================
+initTheme();
 renderConnBookmarks();
 loadProxyConfig();
