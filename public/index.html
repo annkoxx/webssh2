@@ -8,7 +8,7 @@
     <title>WebSSH Terminal</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=27">
+    <link rel="stylesheet" href="/static/css/style.css?v=28">
 </head>
 <body>
     <!-- Custom background image -->
@@ -317,6 +317,13 @@
         </div>
         <div class="term-main">
             <div class="term-body" id="terminalContainer"></div>
+            <!-- Command Input Bar -->
+            <div class="cmd-bar">
+                <textarea class="cmd-input" id="cmdInput" placeholder="输入你想编辑的代码..." rows="1"></textarea>
+                <button class="cmd-send" onclick="sendCmdInput()" title="发送 (Enter)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                </button>
+            </div>
             <!-- Right-click Context Menu -->
             <div class="ctx-menu glass-card" id="ctxMenu">
                 <div class="ctx-item" onclick="termCopy()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>复制</div>
@@ -394,6 +401,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
-    <script src="/static/js/app.js?v=27"></script>
+    <script src="/static/js/app.js?v=28"></script>
 </body>
 </html>

@@ -681,6 +681,36 @@ document.addEventListener('keydown', function (e) {
     if (e.ctrlKey && e.shiftKey && e.key === 'V') { e.preventDefault(); termPaste(); }
 });
 
+// ==================== Command Input Bar ====================
+function sendCmdInput() {
+    var input = document.getElementById('cmdInput');
+    var text = input.value;
+    if (!text) return;
+    if (activeIdx < 0 || !sessions[activeIdx] || !sessions[activeIdx].ws || sessions[activeIdx].ws.readyState !== 1) {
+        showToast('无活动连接', 'error');
+        return;
+    }
+    sessions[activeIdx].ws.send(text + '\n');
+    input.value = '';
+    input.style.height = 'auto';
+    sessions[activeIdx].term.focus();
+}
+
+(function () {
+    var input = document.getElementById('cmdInput');
+    if (!input) return;
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendCmdInput();
+        }
+    });
+    input.addEventListener('input', function () {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+    });
+})();
+
 // ==================== Copy IP ====================
 function copyIP(ip) {
     navigator.clipboard.writeText(ip).then(function () {
