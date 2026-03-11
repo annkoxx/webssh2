@@ -907,8 +907,11 @@ function changeCardScale(delta) {
 }
 
 function applyCardScale(val) {
-    var el = document.querySelector('.login-card');
-    if (el) el.style.transform = val === 100 ? '' : 'scale(' + (val / 100) + ')';
+    var el = document.querySelector('.login-container');
+    if (el) {
+        el.style.transform = val === 100 ? '' : 'scale(' + (val / 100) + ')';
+        el.style.transformOrigin = 'center center';
+    }
 }
 
 function changeEdgeScale(delta) {
