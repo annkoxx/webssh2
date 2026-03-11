@@ -33,7 +33,7 @@ webssh.up.railway.app
 - 毛玻璃 (Glassmorphism) UI + 粒子动画背景
 - 支持 Docker Compose 一键部署
 - 移动端 / iPad 响应式适配
-
+- 支持  网站/192.168.0.1:22/password  快速登录
 ## 快速开始
 
 ### 1. 一键命令部署（推荐）
