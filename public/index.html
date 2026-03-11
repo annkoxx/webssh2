@@ -8,7 +8,7 @@
     <title>WebSSH Terminal</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=24">
+    <link rel="stylesheet" href="/static/css/style.css?v=25">
 </head>
 <body>
     <!-- Custom background image -->
@@ -22,6 +22,21 @@
             <button class="settings-close" onclick="toggleSettings()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="settings-body">
+            <div class="set-group">
+                <div class="set-group-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>系统检测频率</div>
+                <div class="set-row">
+                    <label>检测间隔</label>
+                    <div class="set-zoom-btns">
+                        <button class="set-zoom-btn" onclick="changeSysInterval(-5)">−</button>
+                        <span class="set-zoom-label" id="sysIntervalLabel">60s</span>
+                        <button class="set-zoom-btn" onclick="changeSysInterval(5)">+</button>
+                    </div>
+                </div>
+                <div class="set-row">
+                    <label>步进 ±5 秒，范围 10-600 秒</label>
+                    <button class="set-save-btn" id="sysIntervalSaveBtn" onclick="saveSysInterval()">保存</button>
+                </div>
+            </div>
             <div class="set-group">
                 <div class="set-group-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>页面缩放</div>
                 <div class="set-row">
@@ -379,6 +394,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
-    <script src="/static/js/app.js?v=24"></script>
+    <script src="/static/js/app.js?v=25"></script>
 </body>
 </html>

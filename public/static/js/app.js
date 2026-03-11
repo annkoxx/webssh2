@@ -255,7 +255,8 @@ function connectSession(session) {
             session.heartbeat = setInterval(function () { if (ws.readyState === 1) ws.send('ping'); }, 30000);
             if (document.getElementById('enableSysInfo').checked) {
                 fetchSysInfoFor(session);
-                session.sysInfoTimer = setInterval(function () { fetchSysInfoFor(session); }, 60000);
+                var intv = getSysInterval() * 1000;
+                session.sysInfoTimer = setInterval(function () { fetchSysInfoFor(session); }, intv);
             }
         }
         session.term.write(e.data);
@@ -877,6 +878,48 @@ document.addEventListener('click', function (e) {
     }
 });
 
+// ==================== System Info Interval ====================
+var SYS_INTERVAL_KEY = 'webssh_sys_interval';
+var _sysIntervalTemp = 60;
+
+function getSysInterval() {
+    var v = parseInt(localStorage.getItem(SYS_INTERVAL_KEY));
+    return (v && v >= 10 && v <= 600) ? v : 60;
+}
+
+function changeSysInterval(delta) {
+    _sysIntervalTemp = Math.max(10, Math.min(600, _sysIntervalTemp + delta));
+    document.getElementById('sysIntervalLabel').textContent = _sysIntervalTemp + 's';
+    var btn = document.getElementById('sysIntervalSaveBtn');
+    btn.classList.remove('saved');
+    btn.textContent = '保存';
+}
+
+function saveSysInterval() {
+    localStorage.setItem(SYS_INTERVAL_KEY, _sysIntervalTemp);
+    var btn = document.getElementById('sysIntervalSaveBtn');
+    btn.classList.add('saved');
+    btn.textContent = '已保存';
+    setTimeout(function () {
+        btn.classList.remove('saved');
+        btn.textContent = '保存';
+    }, 1500);
+
+    // Restart polling for all active sessions
+    sessions.forEach(function (s) {
+        if (s.sysInfoTimer) {
+            clearInterval(s.sysInfoTimer);
+            s.sysInfoTimer = setInterval(function () { fetchSysInfoFor(s); }, _sysIntervalTemp * 1000);
+        }
+    });
+    showToast('检测间隔已设为 ' + _sysIntervalTemp + ' 秒', 'success');
+}
+
+function initSysInterval() {
+    _sysIntervalTemp = getSysInterval();
+    document.getElementById('sysIntervalLabel').textContent = _sysIntervalTemp + 's';
+}
+
 // ==================== Settings Panel ====================
 var SETTINGS_KEY = 'webssh_settings';
 var BG_PRESETS = ['#0a0a1a','#0d1117','#1a1a2e','#000000','#1e1e2e','#282a36','#002b36','#2e3440','#e8eaf0','#f0f0f5','#ffffff','#fdf6e3'];
@@ -1126,6 +1169,7 @@ function tryAutoLogin() {
 // ==================== Init ====================
 initTheme();
 initSettings();
+initSysInterval();
 renderConnBookmarks();
 loadProxyConfig();
 tryAutoLogin();
