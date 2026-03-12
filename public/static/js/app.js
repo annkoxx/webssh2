@@ -124,7 +124,6 @@ function loadProxyConfig() {
             document.getElementById('proxyPass').value = cfg.pass || '';
             document.getElementById('enableProxy').checked = true;
             document.getElementById('rememberProxy').checked = true;
-            document.getElementById('proxyPanel').classList.add('show');
         }
     } catch (e) { }
 }
