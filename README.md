@@ -5,7 +5,7 @@
 ## 示例
 效果图在最底下
 #### render.com 托管
-webssh.is-a.shop
+
 
 webssh-te0j.onrender.com
 
