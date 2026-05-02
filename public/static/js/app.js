@@ -1279,6 +1279,25 @@ function tryAutoLogin() {
     }, 500);
 }
 
+// ==================== Splash Screen ====================
+(function () {
+    var splashStart = Date.now();
+    var MIN_SPLASH = 1500;
+
+    function dismissSplash() {
+        var el = document.getElementById('splash');
+        if (!el) return;
+        var elapsed = Date.now() - splashStart;
+        var delay = Math.max(0, MIN_SPLASH - elapsed);
+        setTimeout(function () {
+            el.classList.add('fade-out');
+            setTimeout(function () { el.remove(); }, 650);
+        }, delay);
+    }
+
+    window.__dismissSplash = dismissSplash;
+})();
+
 // ==================== Init ====================
 initTheme();
 initSettings();
@@ -1286,3 +1305,6 @@ initSysInterval();
 renderConnBookmarks();
 loadProxyConfig();
 tryAutoLogin();
+
+// Dismiss splash after settings are applied
+if (window.__dismissSplash) window.__dismissSplash();
