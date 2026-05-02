@@ -8,8 +8,12 @@ services:
     environment:
       - port=${PORT:-8008}
       - savePass=${SAVE_PASS:-true}
+      - showFooter=${SHOW_FOOTER:-true}
       # Uncomment to enable basic auth for the web UI:
       # - authInfo=admin:your_password
+    env_file:
+      - path: .env
+        required: false
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:${PORT:-8008}/"]
       interval: 30s

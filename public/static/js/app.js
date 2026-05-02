@@ -1283,16 +1283,21 @@ function tryAutoLogin() {
 (function () {
     var splashStart = Date.now();
     var MIN_SPLASH = 1500;
+    var dismissed = false;
 
-    function dismissSplash() {
+    function doFade() {
+        if (dismissed) return;
+        dismissed = true;
         var el = document.getElementById('splash');
         if (!el) return;
+        el.classList.add('fade-out');
+        setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 650);
+    }
+
+    function dismissSplash() {
         var elapsed = Date.now() - splashStart;
         var delay = Math.max(0, MIN_SPLASH - elapsed);
-        setTimeout(function () {
-            el.classList.add('fade-out');
-            setTimeout(function () { el.remove(); }, 650);
-        }, delay);
+        setTimeout(doFade, delay);
     }
 
     window.__dismissSplash = dismissSplash;
@@ -1306,5 +1311,26 @@ renderConnBookmarks();
 loadProxyConfig();
 tryAutoLogin();
 
-// Dismiss splash after settings are applied
-if (window.__dismissSplash) window.__dismissSplash();
+// Fetch server config (footer visibility etc.), then dismiss splash
+(function () {
+    function applyServerConfig(cfg) {
+        if (cfg && cfg.showFooter === false) {
+            var footer = document.querySelector('.global-footer');
+            if (footer) footer.classList.add('server-hidden');
+        }
+    }
+
+    var req = new XMLHttpRequest();
+    req.open('GET', '/config', true);
+    req.timeout = 3000;
+    req.onload = function () {
+        if (req.status === 200) {
+            try { applyServerConfig(JSON.parse(req.responseText)); } catch (e) {}
+        }
+        if (window.__dismissSplash) window.__dismissSplash();
+    };
+    req.onerror = req.ontimeout = function () {
+        if (window.__dismissSplash) window.__dismissSplash();
+    };
+    req.send();
+})();

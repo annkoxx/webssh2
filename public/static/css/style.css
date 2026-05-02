@@ -220,7 +220,7 @@ textarea{padding:11px 12px;resize:vertical;min-height:72px;font-family:'JetBrain
 .global-footer{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:14px;color:var(--t3);z-index:9998;letter-spacing:0;transition:opacity .3s,visibility .3s}
 .global-footer a{color:var(--t3);text-decoration:none;transition:color var(--tr);cursor:pointer}
 .global-footer a:hover{color:var(--c1)}
-.global-footer.hidden,.global-footer.user-hidden{opacity:0;visibility:hidden;pointer-events:none}
+.global-footer.hidden,.global-footer.user-hidden,.global-footer.server-hidden{opacity:0;visibility:hidden;pointer-events:none}
 #terminalView.active~.global-footer{opacity:0;visibility:hidden;pointer-events:none}
 ::selection{background:rgba(0,212,255,.3);color:#fff}
 input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none}

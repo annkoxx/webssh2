@@ -20,25 +20,40 @@ import (
 var f embed.FS
 
 var (
-	port     = flag.Int("p", 8008, "服务运行端口")
-	v        = flag.Bool("v", false, "显示版本号")
-	authInfo = flag.String("a", "", "开启账号密码登录验证, '-a user:pass'的格式传参")
-	timeout  int
-	savePass bool
-	version  = "1.0.0"
-	username string
-	password string
+	port       = flag.Int("p", 8008, "服务运行端口")
+	v          = flag.Bool("v", false, "显示版本号")
+	authInfo   = flag.String("a", "", "开启账号密码登录验证, '-a user:pass'的格式传参")
+	timeout    int
+	savePass   bool
+	showFooter bool
+	version    = "1.0.0"
+	username   string
+	password   string
 )
 
 func init() {
 	flag.IntVar(&timeout, "t", 120, "ssh连接超时时间(min)")
 	flag.BoolVar(&savePass, "s", true, "保存ssh密码")
+	showFooter = true
 	if envVal, ok := os.LookupEnv("savePass"); ok {
 		if b, err := strconv.ParseBool(envVal); err == nil {
 			savePass = b
 		}
 	}
+	if envVal, ok := os.LookupEnv("showFooter"); ok {
+		if b, err := strconv.ParseBool(envVal); err == nil {
+			showFooter = b
+		}
+	}
+	if envVal, ok := os.LookupEnv("SHOW_FOOTER"); ok {
+		if b, err := strconv.ParseBool(envVal); err == nil {
+			showFooter = b
+		}
+	}
 	if envVal, ok := os.LookupEnv("authInfo"); ok {
+		*authInfo = envVal
+	}
+	if envVal, ok := os.LookupEnv("AUTH_INFO"); ok && *authInfo == "" {
 		*authInfo = envVal
 	}
 	if envVal, ok := os.LookupEnv("PORT"); ok {
@@ -71,6 +86,10 @@ func main() {
 	server.Use(gin.Recovery())
 	server.SetTrustedProxies(nil)
 	server.Use(gzip.Gzip(gzip.DefaultCompression))
+
+	server.GET("/config", func(c *gin.Context) {
+		c.JSON(200, gin.H{"showFooter": showFooter})
+	})
 
 	server.GET("/term", func(c *gin.Context) {
 		controller.TermWs(c, time.Duration(timeout)*time.Minute)

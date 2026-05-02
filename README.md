@@ -52,10 +52,23 @@ webssh.up.railway.app
 ### 1. 一键命令部署（推荐）
 
 ```bash
-git clone https://github.com/a06342637/webssh2.git && cd webssh2 && docker compose up -d
+git clone https://github.com/a06342637/webssh2.git && cd webssh2 && sh setup.sh
 ```
 
-启动成功后，浏览器打开 `http://你的服务器IP:8008` 即可。
+运行后会有一个简短的交互向导，按提示回答即可：
+
+```
+服务端口 [默认 8008，直接回车跳过]:          ← 直接回车使用 8008
+是否显示底部版权页脚？([回车]=显示  n=不显示): ← 回车=显示，输入 n=隐藏
+是否启用 Web 登录验证？(y=启用  [回车]=不启用): ← 可选
+```
+
+回答完成后自动 `docker compose up -d --build` 启动。启动成功后浏览器打开 `http://你的服务器IP:8008` 即可。
+
+> 如果不需要交互向导，也可以直接运行：
+> ```bash
+> git clone https://github.com/a06342637/webssh2.git && cd webssh2 && docker compose up -d
+> ```
 
 ### 2. Docker Compose 部署
 
