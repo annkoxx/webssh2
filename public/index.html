@@ -8,7 +8,7 @@
     <title>WebSSH Terminal</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=30">
+    <link rel="stylesheet" href="/static/css/style.css?v=31">
 </head>
 <body>
     <!-- Custom background image -->
@@ -95,6 +95,16 @@
                 <div class="set-row">
                     <label id="blurLabel">20px</label>
                     <input type="range" id="blurRange" min="0" max="40" value="20" oninput="changeBlur(this.value)" style="flex:2;accent-color:var(--c1)">
+                </div>
+            </div>
+            <div class="set-group">
+                <div class="set-group-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20h16M4 4h16"/></svg>页脚显示</div>
+                <div class="set-row">
+                    <label>显示底部版权信息</label>
+                    <label class="checkbox-field" for="toggleFooter" style="flex:0;padding:0">
+                        <input type="checkbox" id="toggleFooter" checked onchange="toggleFooterVisibility()">
+                        <span class="checkbox-custom"></span>
+                    </label>
                 </div>
             </div>
             <button class="set-btn danger" onclick="resetAllSettings()">恢复默认设置</button>
@@ -401,6 +411,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
-    <script src="/static/js/app.js?v=30"></script>
+    <script src="/static/js/app.js?v=31"></script>
 </body>
 </html>

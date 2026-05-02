@@ -164,18 +164,18 @@ textarea{padding:11px 12px;resize:vertical;min-height:72px;font-family:'JetBrain
 .upload-label{cursor:pointer}
 
 /* ==================== COMMAND INPUT BAR ==================== */
-.cmd-bar{position:absolute;bottom:36px;left:50%;transform:translateX(-50%);width:60%;max-width:700px;min-width:280px;display:flex;align-items:flex-end;gap:8px;z-index:15;padding:0 12px}
-.cmd-input{flex:1;padding:10px 14px;background:rgba(15,15,35,.6);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--brd);border-radius:var(--rs);color:var(--t1);font-size:13px;font-family:'JetBrains Mono','Fira Code',monospace;resize:vertical;min-height:38px;max-height:150px;outline:none;transition:all var(--tr);line-height:1.5}
+.cmd-bar{display:flex;align-items:flex-end;gap:8px;padding:6px 16px;background:var(--card);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border-top:1px solid var(--brd);flex-shrink:0;z-index:15}
+.cmd-input{flex:1;padding:8px 14px;background:rgba(15,15,35,.6);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid var(--brd);border-radius:var(--rs);color:var(--t1);font-size:13px;font-family:'JetBrains Mono','Fira Code',monospace;resize:none;min-height:38px;max-height:120px;outline:none;transition:all var(--tr);line-height:1.5}
 .cmd-input::placeholder{color:var(--t3)}
 .cmd-input:focus{border-color:var(--brf);box-shadow:0 0 0 3px rgba(0,212,255,.1);background:rgba(15,15,35,.8)}
 .cmd-send{width:38px;height:38px;flex-shrink:0;border:1px solid var(--brd);border-radius:var(--rs);background:rgba(15,15,35,.6);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:var(--c1);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--tr)}
 .cmd-send:hover{background:var(--c1);color:#fff;border-color:var(--c1);box-shadow:0 0 12px var(--c1g);transform:scale(1.05)}
 .cmd-send:active{transform:scale(.95)}
 
-.term-edge-btns{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:20;display:flex;flex-direction:column;gap:0}
+.term-edge-btns{position:absolute;right:0;top:0;bottom:52px;z-index:20;display:flex;flex-direction:column;justify-content:center;gap:0}
 .term-edge-btns .edge-btn{width:36px;height:44px;border-right:none}
 .term-edge-btns .edge-btn:first-child{border-bottom:none}
-.term-main{flex:1;display:flex;overflow:hidden;position:relative;min-height:0}
+.term-main{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;min-height:0}
 .term-body{flex:1;display:flex;flex-direction:column;background:var(--term-bg);overflow:hidden;min-width:0;min-height:0;padding:12px 16px}
 #terminal{flex:1;min-height:0}
 .term-body .xterm{height:100%!important}
@@ -217,9 +217,11 @@ textarea{padding:11px 12px;resize:vertical;min-height:72px;font-family:'JetBrain
 @keyframes ti{0%{opacity:0;transform:translateX(60px) scale(.8)}100%{opacity:1;transform:translateX(0) scale(1)}}
 @keyframes to{to{opacity:0;transform:translateX(60px)}}
 
-.global-footer{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:14px;color:var(--t3);z-index:9998;letter-spacing:0}
+.global-footer{position:fixed;bottom:8px;left:0;right:0;text-align:center;font-size:14px;color:var(--t3);z-index:9998;letter-spacing:0;transition:opacity .3s,visibility .3s}
 .global-footer a{color:var(--t3);text-decoration:none;transition:color var(--tr);cursor:pointer}
 .global-footer a:hover{color:var(--c1)}
+.global-footer.hidden,.global-footer.user-hidden{opacity:0;visibility:hidden;pointer-events:none}
+#terminalView.active~.global-footer{opacity:0;visibility:hidden;pointer-events:none}
 ::selection{background:rgba(0,212,255,.3);color:#fff}
 input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button{-webkit-appearance:none}
 input[type="number"]{-moz-appearance:textfield}
@@ -369,8 +371,8 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
     .topbar-user{display:none}
     .topbar-metrics{display:none}
     .term-body{padding:8px 10px}
-    .cmd-bar{width:90%;bottom:32px;min-width:0}
-    .cmd-input{font-size:12px;padding:8px 10px}
+    .cmd-bar{padding:4px 10px}
+    .cmd-input{font-size:12px;padding:7px 10px}
     .cmd-send{width:34px;height:34px}
     .toast-container{top:4px;right:4px;left:4px}
     .toast{max-width:100%;font-size:10px;padding:6px 8px}

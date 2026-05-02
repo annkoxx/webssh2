@@ -47,7 +47,18 @@ function showToast(msg, type) {
 }
 
 function setStatus(s, t) { var e = document.getElementById('statusIndicator'); e.className = 'status-indicator ' + s; e.querySelector('.status-text').textContent = t; }
-function showView(id) { document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); }); document.getElementById(id).classList.add('active'); }
+function showView(id) {
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+    document.getElementById(id).classList.add('active');
+    var footer = document.querySelector('.global-footer');
+    if (footer) {
+        if (id === 'terminalView') {
+            footer.classList.add('hidden');
+        } else {
+            footer.classList.remove('hidden');
+        }
+    }
+}
 
 // ==================== Login Form ====================
 function switchAuthTab(tab) {
@@ -1096,6 +1107,22 @@ function toggleParticlesEffect() {
     document.querySelector('.bg-animation').style.display = show ? '' : 'none';
 }
 
+function toggleFooterVisibility() {
+    var show = document.getElementById('toggleFooter').checked;
+    var s = loadSettings();
+    s.footer = show;
+    saveSettings(s);
+    var footer = document.querySelector('.global-footer');
+    if (footer) {
+        footer.style.setProperty('--footer-user-hidden', show ? '' : 'none');
+        if (!show) {
+            footer.classList.add('user-hidden');
+        } else {
+            footer.classList.remove('user-hidden');
+        }
+    }
+}
+
 function changeBlur(val) {
     var s = loadSettings();
     s.blur = parseInt(val);
@@ -1112,8 +1139,14 @@ function resetAllSettings() {
     setBgImage('');
     document.getElementById('particles').style.display = '';
     document.querySelector('.bg-animation').style.display = '';
+    var toggleP = document.getElementById('toggleParticles');
+    if (toggleP) toggleP.checked = true;
     applyCardScale(100);
     applyEdgeScale(100);
+    var footer = document.querySelector('.global-footer');
+    if (footer) footer.classList.remove('user-hidden');
+    var toggleF = document.getElementById('toggleFooter');
+    if (toggleF) toggleF.checked = true;
     renderBgSwatches();
     showToast('已恢复默认', 'success');
 }
@@ -1132,15 +1165,31 @@ function initSettings() {
     if (s.particles === false) {
         document.getElementById('particles').style.display = 'none';
         document.querySelector('.bg-animation').style.display = 'none';
+        var cb = document.getElementById('toggleParticles');
+        if (cb) cb.checked = false;
     }
     if (s.blur != null) {
         document.documentElement.style.setProperty('--blur', s.blur + 'px');
     }
     if (s.cardScale && s.cardScale !== 100) applyCardScale(s.cardScale);
     if (s.edgeScale && s.edgeScale !== 100) applyEdgeScale(s.edgeScale);
+    if (s.footer === false) {
+        var footer = document.querySelector('.global-footer');
+        if (footer) footer.classList.add('user-hidden');
+        var cb2 = document.getElementById('toggleFooter');
+        if (cb2) cb2.checked = false;
+    }
 }
 
 // ==================== URL Auto-Login ====================
+function isPrivateKey(s) {
+    if (!s) return false;
+    var decoded = s;
+    try { decoded = decodeURIComponent(s); } catch (e) {}
+    // Private keys start with -----BEGIN or are very long (>200 chars)
+    return decoded.indexOf('-----BEGIN') === 0 || decoded.indexOf('-----BEGIN') !== -1 || decoded.length > 200;
+}
+
 function parseUrlLogin() {
     var path = location.pathname;
     if (!path || path === '/') return null;
@@ -1148,12 +1197,15 @@ function parseUrlLogin() {
     if (!path) return null;
 
     var parts = path.split('/');
-    var host, port, user, pass;
+    var host, port, user, pass, authType;
 
-    // Format: ip:port/password (2 parts, host:port/pass)
-    // Format: ip:port/user/password (3 parts)
-    // Format: ip/port/password (3 parts, all numeric port)
-    // Format: ip/port/user/password (4 parts)
+    // Supported formats:
+    // ip:port/password                 (2 parts)
+    // ip:port/user/password            (3 parts, host has colon)
+    // ip/port/password                 (3 parts, port is numeric)
+    // ip/user/password                 (3 parts, port is not numeric)
+    // ip/port/user/password            (4 parts)
+    // ip/port/user/privatekey          (4 parts, key detected)
 
     if (parts.length === 2) {
         // ip:port/password OR ip/password
@@ -1184,7 +1236,7 @@ function parseUrlLogin() {
             pass = decodeURIComponent(parts[2]);
         }
     } else if (parts.length === 4) {
-        // ip/port/user/password
+        // ip/port/user/password  OR  ip/port/user/privatekey
         host = parts[0];
         port = parseInt(parts[1]);
         user = decodeURIComponent(parts[2]);
@@ -1194,7 +1246,11 @@ function parseUrlLogin() {
     }
 
     if (!host) return null;
-    return { host: host, port: port || 22, user: user || 'root', pass: pass || '' };
+
+    // Detect if credential is a private key
+    authType = isPrivateKey(pass) ? 'key' : 'password';
+
+    return { host: host, port: port || 22, user: user || 'root', pass: pass || '', authType: authType };
 }
 
 function tryAutoLogin() {
@@ -1205,8 +1261,14 @@ function tryAutoLogin() {
     document.getElementById('hostname').value = info.host;
     document.getElementById('port').value = info.port;
     document.getElementById('username').value = info.user;
-    switchAuthTab('password');
-    document.getElementById('password').value = info.pass;
+
+    if (info.authType === 'key') {
+        switchAuthTab('key');
+        document.getElementById('privateKey').value = info.pass;
+    } else {
+        switchAuthTab('password');
+        document.getElementById('password').value = info.pass;
+    }
 
     // Clean URL without reload
     history.replaceState(null, '', '/');
