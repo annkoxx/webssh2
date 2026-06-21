@@ -436,6 +436,102 @@ var SBK = 'webssh_script_bm';
 function loadBM(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch (e) { return []; } }
 function saveBM(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
 
+function exportScriptBookmarks() {
+    var scripts = loadBM(SBK);
+    if (!scripts.length) { showToast('暂无脚本可导出', 'info'); return; }
+    var data = {
+        app: 'webssh2',
+        type: 'script_bookmarks',
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        origin: location.origin,
+        scripts: scripts
+    };
+    var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    a.href = url;
+    a.download = 'webssh-script-bookmarks-' + stamp + '.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    showToast('已导出 ' + scripts.length + ' 个脚本', 'success');
+}
+
+function triggerScriptImport() {
+    var input = document.getElementById('scriptImportFile');
+    if (!input) { showToast('导入控件未找到', 'error'); return; }
+    input.value = '';
+    input.click();
+}
+
+function extractImportedScripts(data) {
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.scripts)) return data.scripts;
+    if (data && data.storage && Array.isArray(data.storage[SBK])) return data.storage[SBK];
+    if (data && data.bookmarks && Array.isArray(data.bookmarks.scripts)) return data.bookmarks.scripts;
+    if (data && Array.isArray(data[SBK])) return data[SBK];
+    return [];
+}
+
+function normalizeImportedScripts(items) {
+    var out = [];
+    items.forEach(function (item, idx) {
+        if (!item || typeof item !== 'object') return;
+        var name = typeof item.name === 'string' ? item.name.trim() : '';
+        var cmd = '';
+        if (typeof item.cmd === 'string') cmd = item.cmd;
+        else if (typeof item.command === 'string') cmd = item.command;
+        else if (typeof item.content === 'string') cmd = item.content;
+        cmd = cmd.trim();
+        if (!cmd) return;
+        if (!name) name = '导入脚本 ' + (idx + 1);
+        out.push({ name: name, cmd: cmd });
+    });
+    return out;
+}
+
+function importScriptBookmarks(input) {
+    var file = input && input.files && input.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function () {
+        try {
+            var data = JSON.parse(reader.result);
+            var incoming = normalizeImportedScripts(extractImportedScripts(data));
+            if (!incoming.length) { showToast('未找到可导入的脚本书签', 'error'); return; }
+            var current = loadBM(SBK);
+            var seen = {};
+            current.forEach(function (b) {
+                seen[((b.name || '').trim()) + '\n' + ((b.cmd || '').trim())] = true;
+            });
+            var added = 0, skipped = 0;
+            incoming.forEach(function (b) {
+                var key = b.name + '\n' + b.cmd;
+                if (seen[key]) { skipped++; return; }
+                current.push(b);
+                seen[key] = true;
+                added++;
+            });
+            saveBM(SBK, current);
+            showPresets = false;
+            renderScriptBookmarks();
+            showToast(added ? ('已导入 ' + added + ' 个脚本') : ('没有新增脚本，跳过 ' + skipped + ' 个重复项'), added ? 'success' : 'info');
+        } catch (e) {
+            showToast('导入失败：JSON 文件无效', 'error');
+        } finally {
+            input.value = '';
+        }
+    };
+    reader.onerror = function () {
+        input.value = '';
+        showToast('导入失败：无法读取文件', 'error');
+    };
+    reader.readAsText(file, 'utf-8');
+}
+
 function renderConnBookmarks() {
     var l = document.getElementById('connBookmarkList'), bms = loadBM(CBK);
     if (!bms.length) { l.innerHTML = '<div class="bm-empty">暂无书签</div>'; return; }

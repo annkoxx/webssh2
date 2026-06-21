@@ -133,6 +133,8 @@ textarea{padding:11px 12px;resize:vertical;min-height:72px;font-family:'JetBrain
 .script-input:focus{border-color:var(--brf)}
 .script-textarea{padding:7px 9px;background:var(--inp);border:1px solid var(--brd);border-radius:var(--rx);color:var(--c1);font-size:11px;font-family:'JetBrains Mono',monospace;outline:none;resize:vertical;min-height:50px;width:100%;transition:all var(--tr)}
 .script-textarea:focus{border-color:var(--brf)}
+.script-backup-actions{display:flex;gap:6px}
+.script-backup-btn{flex:1;margin:0;padding:7px;font-size:11px;border-style:solid}
 
 /* Script item run icon */
 .bm-item-run{font-size:9px;color:var(--ok);opacity:.6}
