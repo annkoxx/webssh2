@@ -8,7 +8,7 @@
     <title>WebSSH Terminal</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🖥️</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
-    <link rel="stylesheet" href="/static/css/style.css?v=37">
+    <link rel="stylesheet" href="/static/css/style.css?v=38">
     <style>
     /* Splash screen – shown from first byte, hides FOUC */
     #splash{position:fixed;inset:0;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#0a0a1a;transition:opacity .55s ease,visibility .55s ease}
@@ -162,6 +162,23 @@
                         <input type="checkbox" id="toggleFooter" checked onchange="toggleFooterVisibility()">
                         <span class="checkbox-custom"></span>
                     </label>
+                </div>
+            </div>
+            <div class="set-group admin-update-group">
+                <div class="set-group-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0115-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 01-15 6.7L3 16"/></svg>版本更新</div>
+                <div class="update-version-card" id="updateVersionInfo">
+                    <div class="update-version-line"><span>当前版本</span><b id="currentVersionLabel">未检测</b></div>
+                    <div class="update-version-line"><span>远端版本</span><b id="remoteVersionLabel">未检测</b></div>
+                    <div class="update-version-status" id="updateVersionStatus">只有管理员账号可以检测和更新版本。</div>
+                </div>
+                <label class="checkbox-field" for="forceUpdateVersion" style="padding:0">
+                    <input type="checkbox" id="forceUpdateVersion">
+                    <span class="checkbox-custom"></span>
+                    <span>强制更新版本</span>
+                </label>
+                <div class="update-actions">
+                    <button class="set-save-btn" type="button" onclick="checkVersionUpdate()">检测版本</button>
+                    <button class="set-save-btn update-run-btn" type="button" onclick="runVersionUpdate()">更新版本</button>
                 </div>
             </div>
             <button class="set-btn danger" onclick="resetAllSettings()">恢复默认设置</button>
@@ -487,11 +504,11 @@
                     </div>
                     <div class="input-field">
                         <label>用户名</label>
-                        <input type="text" id="authUsername" class="script-input" placeholder="6-32 位字母或数字" autocomplete="username">
+                        <input type="text" id="authUsername" class="script-input" placeholder="5-32 位字母或数字" autocomplete="username">
                     </div>
                     <div class="input-field">
                         <label>密码</label>
-                        <input type="password" id="authPassword" class="script-input" placeholder="至少 6 位" autocomplete="current-password">
+                        <input type="password" id="authPassword" class="script-input" placeholder="大于 6 位" autocomplete="current-password">
                     </div>
                     <div class="auth-hint" id="authHint">登录后会自动同步脚本书签；未登录时仍保存在本地浏览器。</div>
                     <button class="drawer-add auth-submit-btn" type="button" onclick="submitAuthForm()">登录</button>
@@ -521,6 +538,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
-    <script src="/static/js/app.js?v=36"></script>
+    <script src="/static/js/app.js?v=40"></script>
 </body>
 </html>

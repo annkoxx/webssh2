@@ -104,6 +104,8 @@ func main() {
 		api.POST("/auth/logout", controller.AuthLogout)
 		api.GET("/scripts", controller.GetScriptBookmarks)
 		api.POST("/scripts/sync", controller.SyncScriptBookmarks)
+		api.GET("/admin/version", controller.AdminVersion)
+		api.POST("/admin/update", controller.AdminUpdate)
 	}
 
 	server.GET("/term", func(c *gin.Context) {

@@ -7,3 +7,7 @@ services:
     envVars:
       - key: PORT
         value: "10000"
+      - key: WEBSSH_ADMIN_USER
+        value: "admin"
+      - key: WEBSSH_ADMIN_PASSWORD
+        sync: false

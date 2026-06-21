@@ -10,6 +10,12 @@ services:
       - savePass=${SAVE_PASS:-true}
       - showFooter=${SHOW_FOOTER:-true}
       - WEBSSH_DATA_DIR=/app/data
+      - WEBSSH_ADMIN_USER=${WEBSSH_ADMIN_USER:-admin}
+      - WEBSSH_ADMIN_PASSWORD=${WEBSSH_ADMIN_PASSWORD:-}
+      - WEBSSH_ADMIN_RESET=${WEBSSH_ADMIN_RESET:-false}
+      - WEBSSH_ENABLE_SELF_UPDATE=${WEBSSH_ENABLE_SELF_UPDATE:-true}
+      - WEBSSH_SOURCE_DIR=/app/source
+      - WEBSSH_HOST_PROJECT_DIR=${WEBSSH_HOST_PROJECT_DIR:-${PWD:-.}}
       # Uncomment to enable basic auth for the web UI:
       # - authInfo=admin:your_password
     env_file:
@@ -17,6 +23,8 @@ services:
         required: false
     volumes:
       - webssh_data:/app/data
+      - ${WEBSSH_HOST_PROJECT_DIR:-${PWD:-.}}:/app/source
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:${PORT:-8008}/"]
       interval: 30s

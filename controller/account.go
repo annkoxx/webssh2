@@ -1,12 +1,15 @@
 package controller
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -17,17 +20,21 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const sessionCookieName = "webssh_session"
+const (
+	sessionCookieName = "webssh_session"
+	minPasswordLen    = 7
+)
 
 var (
 	accountStore *AccountStore
-	usernameRule = regexp.MustCompile(`^[A-Za-z0-9]{6,32}$`)
+	usernameRule = regexp.MustCompile(`^[A-Za-z0-9]{5,32}$`)
 )
 
 type StoredUser struct {
 	Username     string `json:"username"`
 	PasswordHash string `json:"passwordHash"`
 	CreatedAt    int64  `json:"createdAt"`
+	IsAdmin      bool   `json:"isAdmin"`
 }
 
 type StoredSession struct {
@@ -75,10 +82,17 @@ func InitAccountStore(dataDir string) error {
 	if err := store.load(); err != nil {
 		return err
 	}
+	store.mu.Lock()
 	store.cleanupExpiredSessionsLocked(time.Now().Unix())
-	if err := store.saveLocked(); err != nil {
+	if err := store.ensureDefaultAdminLocked(); err != nil {
+		store.mu.Unlock()
 		return err
 	}
+	if err := store.saveLocked(); err != nil {
+		store.mu.Unlock()
+		return err
+	}
+	store.mu.Unlock()
 	accountStore = store
 	return nil
 }
@@ -139,14 +153,131 @@ func (s *AccountStore) cleanupExpiredSessionsLocked(now int64) {
 	}
 }
 
+func randomPassword(length int) (string, error) {
+	const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+	if length < 12 {
+		length = 12
+	}
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	for i := range b {
+		b[i] = alphabet[int(b[i])%len(alphabet)]
+	}
+	return string(b), nil
+}
+
+func adminUsernameFromEnv() string {
+	username := strings.TrimSpace(os.Getenv("WEBSSH_ADMIN_USER"))
+	if username == "" {
+		username = "admin"
+	}
+	username = strings.ToLower(username)
+	if !usernameRule.MatchString(username) {
+		fmt.Printf("WEBSSH_ADMIN_USER=%q 无效，已回退为 admin。管理员用户名只能使用 5-32 位字母或数字。\n", username)
+		return "admin"
+	}
+	return username
+}
+
+func adminResetRequested() bool {
+	for _, key := range []string{"WEBSSH_ADMIN_RESET", "WEBSSH_ADMIN_RESET_PASSWORD"} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			if value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (s *AccountStore) hasAdminLocked() bool {
+	for _, user := range s.db.Users {
+		if user.IsAdmin {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *AccountStore) saveAdminLocked(username, password string, created bool) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	user := s.db.Users[username]
+	createdAt := user.CreatedAt
+	if created || createdAt == 0 {
+		createdAt = time.Now().UnixMilli()
+	}
+	s.db.Users[username] = StoredUser{
+		Username:     username,
+		PasswordHash: string(hash),
+		CreatedAt:    createdAt,
+		IsAdmin:      true,
+	}
+	return nil
+}
+
+func (s *AccountStore) ensureDefaultAdminLocked() error {
+	username := adminUsernameFromEnv()
+	password := strings.TrimSpace(os.Getenv("WEBSSH_ADMIN_PASSWORD"))
+	if password != "" && len(password) < minPasswordLen {
+		return fmt.Errorf("WEBSSH_ADMIN_PASSWORD 必须大于 6 位")
+	}
+	if adminResetRequested() {
+		if password == "" {
+			fmt.Println("WEBSSH_ADMIN_RESET=true 但 WEBSSH_ADMIN_PASSWORD 为空，已跳过管理员密码重置。")
+		} else {
+			if err := s.saveAdminLocked(username, password, false); err != nil {
+				return err
+			}
+			fmt.Println("============================================================")
+			fmt.Println("WebSSH 管理员密码已重置")
+			fmt.Printf("用户名: %s\n", username)
+			fmt.Println("密码: 已设置为 WEBSSH_ADMIN_PASSWORD 环境变量的值")
+			fmt.Println("建议重置完成后移除 WEBSSH_ADMIN_RESET，避免每次重启重复重置。")
+			fmt.Println("============================================================")
+			return nil
+		}
+	}
+	if s.hasAdminLocked() {
+		return nil
+	}
+	generated := false
+	if password == "" {
+		var err error
+		password, err = randomPassword(16)
+		if err != nil {
+			return err
+		}
+		generated = true
+	}
+	if err := s.saveAdminLocked(username, password, true); err != nil {
+		return err
+	}
+	fmt.Println("============================================================")
+	fmt.Println("WebSSH 管理员账号已初始化")
+	fmt.Printf("用户名: %s\n", username)
+	if generated {
+		fmt.Printf("密码: %s\n", password)
+		fmt.Println("请尽快登录后保存密码；该随机密码只会在首次创建时打印到 Docker 日志。")
+	} else {
+		fmt.Println("密码: 已使用 WEBSSH_ADMIN_PASSWORD 环境变量设置，不在日志中重复显示。")
+	}
+	fmt.Println("============================================================")
+	return nil
+}
+
 func validateAccount(username, password string) (string, string, string) {
 	username = strings.TrimSpace(username)
 	password = strings.TrimSpace(password)
 	if !usernameRule.MatchString(username) {
-		return "", "", "用户名只能使用 6-32 位字母或数字"
+		return "", "", "用户名只能使用 5-32 位字母或数字"
 	}
-	if len(password) < 6 {
-		return "", "", "密码必须至少 6 位"
+	if len(password) < minPasswordLen {
+		return "", "", "密码必须大于 6 位"
 	}
 	return strings.ToLower(username), password, ""
 }
@@ -221,6 +352,21 @@ func requireAccount(c *gin.Context) (string, bool) {
 	return username, true
 }
 
+func requireAdmin(c *gin.Context) (string, bool) {
+	username, ok := requireAccount(c)
+	if !ok {
+		return "", false
+	}
+	accountStore.mu.Lock()
+	user := accountStore.db.Users[username]
+	accountStore.mu.Unlock()
+	if !user.IsAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"ok": false, "msg": "请登录管理员账号后使用"})
+		return "", false
+	}
+	return username, true
+}
+
 func createLoginSession(c *gin.Context, username string) error {
 	token, err := newSessionToken()
 	if err != nil {
@@ -265,6 +411,7 @@ func AuthRegister(c *gin.Context) {
 		Username:     username,
 		PasswordHash: string(hash),
 		CreatedAt:    time.Now().UnixMilli(),
+		IsAdmin:      false,
 	}
 	if err := createLoginSession(c, username); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "登录会话创建失败"})
@@ -274,7 +421,7 @@ func AuthRegister(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "账号保存失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "注册成功", "data": gin.H{"username": username}})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "注册成功", "data": gin.H{"username": username, "isAdmin": false}})
 }
 
 func AuthLogin(c *gin.Context) {
@@ -310,7 +457,7 @@ func AuthLogin(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "登录状态保存失败"})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "登录成功", "data": gin.H{"username": username}})
+	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "登录成功", "data": gin.H{"username": username, "isAdmin": user.IsAdmin}})
 }
 
 func AuthLogout(c *gin.Context) {
@@ -332,7 +479,10 @@ func AuthMe(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"ok": true, "data": gin.H{"loggedIn": false}})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true, "data": gin.H{"loggedIn": true, "username": username}})
+	accountStore.mu.Lock()
+	user := accountStore.db.Users[username]
+	accountStore.mu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"ok": true, "data": gin.H{"loggedIn": true, "username": username, "isAdmin": user.IsAdmin}})
 }
 
 func sanitizeScriptBookmarks(items []ScriptBookmark) []ScriptBookmark {
@@ -456,4 +606,214 @@ func SyncScriptBookmarks(c *gin.Context) {
 			"count":     len(result.Items),
 		},
 	})
+}
+
+func sourceDir() string {
+	if v := strings.TrimSpace(os.Getenv("WEBSSH_SOURCE_DIR")); v != "" {
+		return v
+	}
+	return "/app/source"
+}
+
+func hostProjectDir() string {
+	return strings.TrimSpace(os.Getenv("WEBSSH_HOST_PROJECT_DIR"))
+}
+
+func validHostProjectDir(dir string) bool {
+	return dir != "" && dir != "." && filepath.IsAbs(dir)
+}
+
+func selfUpdateEnabled() bool {
+	value := strings.TrimSpace(os.Getenv("WEBSSH_ENABLE_SELF_UPDATE"))
+	return value == "1" || strings.EqualFold(value, "true") || strings.EqualFold(value, "yes")
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
+}
+
+func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
+	cmdArgs := append([]string{"-C", dir}, args...)
+	cmd := exec.CommandContext(ctx, "git", cmdArgs...)
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+func dockerOutput(ctx context.Context, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "docker", args...)
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+func currentDockerImage(ctx context.Context) (string, error) {
+	candidates := []string{}
+	if hostname := strings.TrimSpace(os.Getenv("HOSTNAME")); hostname != "" {
+		candidates = append(candidates, hostname)
+	}
+	candidates = append(candidates, "webssh")
+	var last string
+	for _, name := range candidates {
+		out, err := dockerOutput(ctx, "inspect", "-f", "{{.Config.Image}}", name)
+		if err == nil && strings.TrimSpace(out) != "" {
+			return strings.TrimSpace(out), nil
+		}
+		last = out
+	}
+	return "", fmt.Errorf("读取当前 Docker 镜像失败: %s", last)
+}
+
+func startUpdateHelper(ctx context.Context, force bool) (gin.H, error) {
+	dir := sourceDir()
+	hostDir := hostProjectDir()
+	if !validHostProjectDir(hostDir) {
+		return nil, errors.New("WEBSSH_HOST_PROJECT_DIR 未设置为宿主机绝对路径，无法安全执行页面更新。请使用 setup.sh 部署，或在 .env 中设置宿主机源码目录")
+	}
+	image, err := currentDockerImage(ctx)
+	if err != nil {
+		return nil, err
+	}
+	branch, err := gitOutput(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
+	if err != nil || strings.TrimSpace(branch) == "" {
+		branch = "HEAD"
+	}
+	branch = strings.TrimSpace(branch)
+	updaterName := fmt.Sprintf("webssh-updater-%d", time.Now().Unix())
+	composeCmd := "docker compose up -d --build"
+	if force {
+		composeCmd += " --force-recreate"
+	}
+	script := fmt.Sprintf("git fetch origin && git pull --ff-only origin %s && %s", shellQuote(branch), composeCmd)
+	out, err := dockerOutput(ctx,
+		"run", "-d", "--rm",
+		"--name", updaterName,
+		"-v", "/var/run/docker.sock:/var/run/docker.sock",
+		"-v", hostDir+":"+hostDir,
+		"-w", hostDir,
+		"-e", "WEBSSH_HOST_PROJECT_DIR="+hostDir,
+		"-e", "WEBSSH_SOURCE_DIR="+dir,
+		"--entrypoint", "sh",
+		image,
+		"-lc", script,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("启动更新助手失败: %s", out)
+	}
+	return gin.H{
+		"updater":   updaterName,
+		"container": out,
+		"sourceDir": dir,
+		"hostDir":   hostDir,
+	}, nil
+}
+
+func readVersionInfo() (gin.H, error) {
+	dir := sourceDir()
+	if !selfUpdateEnabled() {
+		return gin.H{
+			"available": false,
+			"sourceDir": dir,
+			"msg":       "当前部署未启用页面更新。Docker Compose 可开启 WEBSSH_ENABLE_SELF_UPDATE=true；Render/Railway 请使用平台重新部署。",
+		}, nil
+	}
+	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
+		return gin.H{
+			"available": false,
+			"sourceDir": dir,
+			"msg":       "源代码目录未挂载，无法在线更新",
+		}, nil
+	}
+	if !validHostProjectDir(hostProjectDir()) {
+		return gin.H{
+			"available": false,
+			"sourceDir": dir,
+			"msg":       "WEBSSH_HOST_PROJECT_DIR 未设置为宿主机绝对路径，无法安全执行页面更新。请使用 setup.sh 部署，或在 .env 中设置宿主机源码目录。",
+		}, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	current, err := gitOutput(ctx, dir, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("读取当前版本失败: %s", current)
+	}
+	currentShort, _ := gitOutput(ctx, dir, "rev-parse", "--short", "HEAD")
+	branch, _ := gitOutput(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
+	remoteURL, _ := gitOutput(ctx, dir, "remote", "get-url", "origin")
+	latestLine, err := gitOutput(ctx, dir, "ls-remote", "origin", "HEAD")
+	if err != nil {
+		return nil, fmt.Errorf("检测远端版本失败: %s", latestLine)
+	}
+	latestFields := strings.Fields(latestLine)
+	latest := ""
+	if len(latestFields) > 0 {
+		latest = latestFields[0]
+	}
+	latestShort := latest
+	if len(latestShort) > 12 {
+		latestShort = latestShort[:12]
+	}
+	return gin.H{
+		"available":    true,
+		"sourceDir":    dir,
+		"hostDir":      hostProjectDir(),
+		"branch":       branch,
+		"remote":       remoteURL,
+		"current":      current,
+		"currentShort": currentShort,
+		"latest":       latest,
+		"latestShort":  latestShort,
+		"hasUpdate":    latest != "" && latest != current,
+	}, nil
+}
+
+func AdminVersion(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	info, err := readVersionInfo()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "data": info})
+}
+
+func AdminUpdate(c *gin.Context) {
+	if _, ok := requireAdmin(c); !ok {
+		return
+	}
+	var req struct {
+		Force bool `json:"force"`
+	}
+	_ = c.ShouldBindJSON(&req)
+	info, err := readVersionInfo()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": err.Error()})
+		return
+	}
+	if available, _ := info["available"].(bool); !available {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": info["msg"], "data": info})
+		return
+	}
+	if !req.Force {
+		if hasUpdate, _ := info["hasUpdate"].(bool); !hasUpdate {
+			c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "当前已经是最新版本", "data": info})
+			return
+		}
+	}
+	dir := sourceDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	updateData, err := startUpdateHelper(ctx, req.Force)
+	if err != nil {
+		msg := err.Error()
+		if len(msg) > 4000 {
+			msg = msg[len(msg)-4000:]
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "更新失败", "data": gin.H{"output": msg}})
+		return
+	}
+	updateData["version"] = info
+	updateData["sourceDir"] = dir
+	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "更新任务已启动，Docker 将自动重新构建并重启", "data": updateData})
 }

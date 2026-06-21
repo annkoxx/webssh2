@@ -61,6 +61,9 @@ git clone https://github.com/a06342637/webssh2.git && cd webssh2 && sh setup.sh
 服务端口 [默认 8008，直接回车跳过]:          ← 直接回车使用 8008
 是否显示底部版权页脚？([回车]=显示  n=不显示): ← 回车=显示，输入 n=隐藏
 是否启用 Web 登录验证？(y=启用  [回车]=不启用): ← 可选
+管理员用户名 [默认 admin]:                    ← 回车使用 admin
+管理员密码 [回车=自动随机生成；手动填写需大于 6 位]: ← 推荐生产环境手动设置
+是否启用页面内版本更新？([回车]=启用  n=禁用): ← Docker Compose 可用
 ```
 
 回答完成后自动 `docker compose up -d --build` 启动。启动成功后浏览器打开 `http://你的服务器IP:8008` 即可。
@@ -93,6 +96,75 @@ docker compose down
 # 更新
 git pull && docker compose up -d --build
 ```
+
+#### 管理员账号与云端脚本书签
+
+WebSSH 会在首次启动时创建一个管理员账号，用于进入设置面板里的「版本更新」等管理员功能。
+
+- Docker Compose 默认用户名是 `admin`。
+- 如果没有设置 `WEBSSH_ADMIN_PASSWORD`，系统会自动生成随机密码，并只在首次启动时打印到 Docker 日志。
+
+查看默认管理员密码：
+
+```bash
+docker compose logs webssh | grep -A6 "WebSSH 管理员账号"
+```
+
+建议生产环境显式设置管理员账号和密码：
+
+```bash
+WEBSSH_ADMIN_USER=admin WEBSSH_ADMIN_PASSWORD='yourStrongPassword' docker compose up -d --build
+```
+
+管理员用户名必须大于 4 位且只能使用字母或数字；管理员密码必须大于 6 位。
+
+也可以写入 `.env`：
+
+```env
+WEBSSH_ADMIN_USER=admin
+WEBSSH_ADMIN_PASSWORD=yourStrongPassword
+```
+
+#### 忘记管理员密码：Docker 重置方法
+
+Docker Compose 部署可以通过环境变量重置管理员密码：
+
+```bash
+WEBSSH_ADMIN_USER=admin \
+WEBSSH_ADMIN_PASSWORD='newStrongPassword' \
+WEBSSH_ADMIN_RESET=true \
+docker compose up -d --build
+```
+
+重置成功后建议移除 `WEBSSH_ADMIN_RESET=true`，避免每次重启都重复重置。
+
+#### 页面内更新版本（管理员）
+
+设置面板底部有「版本更新」功能，只有管理员账号可以使用。Docker Compose 部署默认会挂载源码目录和 Docker socket。点击更新时，WebSSH 会启动一个临时 updater 容器来执行：
+
+```bash
+git fetch origin
+git pull --ff-only origin 当前分支
+docker compose up -d --build
+```
+
+这样 WebSSH 主容器被重启时，更新进程不会一起中断。页面会提示更新任务已启动，并在稍后自动刷新。
+
+如果不想允许页面内更新，可以在 `.env` 中关闭：
+
+```env
+WEBSSH_ENABLE_SELF_UPDATE=false
+```
+
+页面内更新需要容器知道宿主机上的项目目录。使用 `setup.sh` 部署时会自动写入：
+
+```env
+WEBSSH_HOST_PROJECT_DIR=/你的宿主机/webssh2
+```
+
+如果你手动写 `.env`，建议也设置这个变量，并且必须是宿主机绝对路径；否则容器内执行 `docker compose up` 时可能因为宿主机路径不一致导致更新失败。
+
+Render / Railway 这类托管平台通常不能在容器内控制 Docker，因此页面内更新会提示不可用；请使用平台的重新部署功能。
 
 #### 启用 Web 页面登录验证
 
@@ -134,8 +206,13 @@ go run . -a admin:password
 
 1. Fork 本仓库
 2. 在 [Railway](https://railway.app) 新建项目，选择 GitHub 仓库
-3. 设置环境变量 `PORT=8008`
+3. 设置环境变量：
+   - `PORT=8008`
+   - `WEBSSH_ADMIN_USER=admin`
+   - `WEBSSH_ADMIN_PASSWORD=你的管理员密码`
 4. 部署完成后获取公网 URL
+
+> Railway 一键部署如果忘记管理员密码，建议在 Railway 控制台重新设置 `WEBSSH_ADMIN_PASSWORD` 后重新部署；如果没有持久化数据卷，也可以重新部署生成新环境。
 
 ### 5. Render 部署
 
@@ -144,7 +221,12 @@ go run . -a admin:password
 1. Fork 本仓库
 2. 在 [Render](https://render.com) 新建 Web Service，选择 Docker
 3. 自动读取 `render.yaml` 配置
-4. 部署完成后获取公网 URL
+4. 在环境变量中设置：
+   - `WEBSSH_ADMIN_USER=admin`
+   - `WEBSSH_ADMIN_PASSWORD=你的管理员密码`
+5. 部署完成后获取公网 URL
+
+> Render 一键部署如果忘记管理员密码，请在 Render 控制台重新设置 `WEBSSH_ADMIN_PASSWORD` 并重新部署；如果旧数据仍保留且需要强制重置，可同时设置 `WEBSSH_ADMIN_RESET=true` 后重新部署一次，成功后再移除该变量。
 
 ## 使用说明
 
@@ -202,6 +284,12 @@ export default {
 | `-a` | `authInfo` | 空 | Web 登录验证，格式 `user:pass` |
 | `-t` | — | 120 | SSH 连接超时时间（分钟） |
 | `-s` | `savePass` | true | 是否保存密码 |
+| — | `WEBSSH_ADMIN_USER` | admin | 页面管理员用户名 |
+| — | `WEBSSH_ADMIN_PASSWORD` | 自动随机生成 | 页面管理员密码，必须大于 6 位；Render/Railway 建议首次部署前显式设置 |
+| — | `WEBSSH_ADMIN_RESET` | false | 设置为 true 并提供 `WEBSSH_ADMIN_PASSWORD` 可重置管理员密码 |
+| — | `WEBSSH_ENABLE_SELF_UPDATE` | Docker Compose 为 true | 是否允许管理员在页面里执行版本更新 |
+| — | `WEBSSH_SOURCE_DIR` | `/app/source` | 页面更新功能使用的源码目录 |
+| — | `WEBSSH_HOST_PROJECT_DIR` | 当前项目目录 | Docker Compose 页面更新时使用的宿主机源码目录 |
 
 ## 技术栈
 

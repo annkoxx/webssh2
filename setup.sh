@@ -43,10 +43,60 @@ if [ "$AUTH_INPUT" = "y" ] || [ "$AUTH_INPUT" = "Y" ]; then
     fi
 fi
 
+# ── 4. 管理员账号 ─────────────────────────────────────────────────────────────
+echo ""
+echo "  [管理员账号说明] 管理员可以在页面设置里检测版本和更新版本。"
+echo "  默认用户名是 admin；密码留空时会自动随机生成，并只在首次启动的 Docker 日志里显示。"
+while :; do
+    printf "管理员用户名 [默认 admin]: "
+    read ADMIN_USER
+    if [ -z "$ADMIN_USER" ]; then
+        ADMIN_USER=admin
+    fi
+    if printf "%s" "$ADMIN_USER" | grep -Eq '^[A-Za-z0-9]{5,32}$'; then
+        break
+    fi
+    echo "  用户名只能使用 5-32 位字母或数字。"
+done
+
+while :; do
+    printf "管理员密码 [回车=自动随机生成；手动填写需大于 6 位]: "
+    if [ -t 0 ] && command -v stty >/dev/null 2>&1; then
+        stty -echo
+        read ADMIN_PASS
+        stty echo
+        echo ""
+    else
+        read ADMIN_PASS
+    fi
+    if [ -z "$ADMIN_PASS" ] || [ ${#ADMIN_PASS} -ge 7 ]; then
+        break
+    fi
+    echo "  管理员密码必须大于 6 位；也可以直接回车自动随机生成。"
+done
+
+# ── 5. 页面内更新 ─────────────────────────────────────────────────────────────
+echo ""
+echo "  [页面内更新说明] 启用后管理员可以在设置里执行 git pull + docker compose up -d --build。"
+echo "  该功能需要 Docker Compose 部署，并会挂载当前源码目录和 Docker socket。"
+printf "是否启用页面内版本更新？([回车]=启用  n=禁用): "
+read UPDATE_INPUT
+if [ "$UPDATE_INPUT" = "n" ] || [ "$UPDATE_INPUT" = "N" ]; then
+    ENABLE_SELF_UPDATE=false
+else
+    ENABLE_SELF_UPDATE=true
+fi
+
+HOST_PROJECT_DIR=$(pwd -P 2>/dev/null || pwd)
+
 # ── 写入 .env ─────────────────────────────────────────────────────────────────
 cat > .env <<EOF
 PORT=${PORT_INPUT}
 SHOW_FOOTER=${SHOW_FOOTER}
+WEBSSH_ADMIN_USER=${ADMIN_USER}
+WEBSSH_ADMIN_PASSWORD=${ADMIN_PASS}
+WEBSSH_ENABLE_SELF_UPDATE=${ENABLE_SELF_UPDATE}
+WEBSSH_HOST_PROJECT_DIR=${HOST_PROJECT_DIR}
 EOF
 
 if [ -n "$AUTH_INFO" ]; then
@@ -55,6 +105,12 @@ fi
 
 echo ""
 echo "✅ 配置已写入 .env"
+if [ -z "$ADMIN_PASS" ]; then
+    echo "🔐 管理员密码将自动生成；启动后运行下面命令查看："
+    echo "   docker compose logs webssh | grep -A6 \"WebSSH 管理员账号\""
+else
+    echo "🔐 管理员账号: ${ADMIN_USER}"
+fi
 echo ""
 
 # ── 启动 ──────────────────────────────────────────────────────────────────────
@@ -63,4 +119,7 @@ docker compose up -d --build
 
 echo ""
 echo "🌐 启动成功！浏览器打开: http://你的服务器IP:${PORT_INPUT}"
+if [ -z "$ADMIN_PASS" ]; then
+    echo "🔐 随机管理员密码查看命令: docker compose logs webssh | grep -A6 \"WebSSH 管理员账号\""
+fi
 echo ""

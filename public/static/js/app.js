@@ -569,7 +569,7 @@ function updateAccountUI() {
     var btn = document.getElementById('scriptAccountBtn');
     if (btn) {
         if (currentAccount && currentAccount.username) {
-            btn.textContent = '☁ ' + currentAccount.username;
+            btn.textContent = (currentAccount.isAdmin ? '♛ ' : '☁ ') + currentAccount.username;
             btn.classList.add('logged-in');
         } else {
             btn.textContent = '登录/注册';
@@ -582,7 +582,7 @@ function updateAccountUI() {
     if (currentAccount && currentAccount.username) {
         if (loggedIn) loggedIn.style.display = '';
         if (loggedOut) loggedOut.style.display = 'none';
-        if (name) name.textContent = currentAccount.username;
+        if (name) name.textContent = currentAccount.username + (currentAccount.isAdmin ? '（管理员）' : '');
         setCloudStatus('已登录：可同步云端脚本书签', 'synced');
     } else {
         if (loggedIn) loggedIn.style.display = 'none';
@@ -632,18 +632,21 @@ function switchAuthMode(mode) {
     if (loginTab) loginTab.classList.toggle('active', authMode === 'login');
     if (registerTab) registerTab.classList.toggle('active', authMode === 'register');
     if (submit) submit.textContent = authMode === 'register' ? '注册并登录' : '登录';
-    if (hint) hint.textContent = authMode === 'register' ? '用户名只能用字母或数字，用户名和密码都至少 6 位。' : '登录后会自动同步脚本书签；未登录时仍保存在本地浏览器。';
+    if (hint) hint.textContent = authMode === 'register' ? '用户名只能用字母或数字，用户名大于 4 位，密码大于 6 位。' : '登录后会自动同步脚本书签；未登录时仍保存在本地浏览器。';
 }
 
 function submitAuthForm() {
     var username = document.getElementById('authUsername').value.trim();
     var password = document.getElementById('authPassword').value.trim();
-    if (!/^[A-Za-z0-9]{6,32}$/.test(username)) { showToast('用户名只能使用 6-32 位字母或数字', 'error'); return; }
-    if (password.length < 6) { showToast('密码必须至少 6 位', 'error'); return; }
+    if (!/^[A-Za-z0-9]{5,32}$/.test(username)) { showToast('用户名只能使用 5-32 位字母或数字', 'error'); return; }
+    if (password.length < 7) { showToast('密码必须大于 6 位', 'error'); return; }
     var path = authMode === 'register' ? '/api/auth/register' : '/api/auth/login';
     apiJSON(path, { method: 'POST', body: { username: username, password: password } })
         .then(function (res) {
-            currentAccount = { username: res.data && res.data.username ? res.data.username : username.toLowerCase() };
+            currentAccount = {
+                username: res.data && res.data.username ? res.data.username : username.toLowerCase(),
+                isAdmin: !!(res.data && res.data.isAdmin)
+            };
             accountAutoSynced = false;
             updateAccountUI();
             hideAuthModal();
@@ -669,7 +672,7 @@ function refreshAccountState() {
     apiJSON('/api/auth/me')
         .then(function (res) {
             var d = res.data || {};
-            currentAccount = d.loggedIn ? { username: d.username } : null;
+            currentAccount = d.loggedIn ? { username: d.username, isAdmin: !!d.isAdmin } : null;
             updateAccountUI();
             if (currentAccount && !accountAutoSynced) {
                 accountAutoSynced = true;
@@ -716,6 +719,80 @@ function syncScriptBookmarks(mode, silent) {
 function syncLocalScriptsIfLogged() {
     if (!currentAccount || !currentAccount.username) return;
     setTimeout(function () { syncScriptBookmarks('push', true); }, 80);
+}
+
+function setVersionStatus(text, cls) {
+    var el = document.getElementById('updateVersionStatus');
+    if (!el) return;
+    el.className = 'update-version-status' + (cls ? ' ' + cls : '');
+    el.textContent = text;
+}
+
+function setVersionLabels(data) {
+    data = data || {};
+    var cur = document.getElementById('currentVersionLabel');
+    var remote = document.getElementById('remoteVersionLabel');
+    if (cur) cur.textContent = data.currentShort || data.current || '未知';
+    if (remote) remote.textContent = data.latestShort || data.latest || '未知';
+}
+
+function requireAdminForUpdate() {
+    if (!currentAccount || !currentAccount.username) {
+        openAuthModal('login');
+        showToast('请登录管理员账号后使用', 'info');
+        return false;
+    }
+    if (!currentAccount.isAdmin) {
+        showToast('请登录管理员账号后使用', 'error');
+        return false;
+    }
+    return true;
+}
+
+function checkVersionUpdate() {
+    if (!requireAdminForUpdate()) return;
+    setVersionStatus('正在检测远端版本...', '');
+    apiJSON('/api/admin/version')
+        .then(function (res) {
+            var data = res.data || {};
+            setVersionLabels(data);
+            if (data.available === false) {
+                setVersionStatus(data.msg || '当前部署不支持页面更新', 'warn');
+            } else if (data.hasUpdate) {
+                setVersionStatus('检测到新版本，可以更新。', 'warn');
+            } else {
+                setVersionStatus('当前已经是最新版本。', 'ok');
+            }
+            showToast('版本检测完成', 'success');
+        })
+        .catch(function (err) {
+            setVersionStatus(err.msg || '版本检测失败', 'err');
+            showToast(err.msg || '版本检测失败', 'error');
+        });
+}
+
+function runVersionUpdate() {
+    if (!requireAdminForUpdate()) return;
+    var force = !!document.getElementById('forceUpdateVersion').checked;
+    var reloadDelay = 180000;
+    setVersionStatus(force ? '正在启动强制更新任务，请稍候...' : '正在启动更新任务，请稍候...', 'warn');
+    apiJSON('/api/admin/update', { method: 'POST', body: { force: force } })
+        .then(function (res) {
+            setVersionStatus((res.msg || '更新任务已启动') + '。构建可能需要几分钟，页面会在约 3 分钟后自动刷新。', 'warn');
+            showToast(res.msg || '更新任务已启动', 'success');
+            setTimeout(function () { location.reload(); }, reloadDelay);
+        })
+        .catch(function (err) {
+            if (!err || !err.msg) {
+                setVersionStatus('更新请求已发出，Docker 可能正在重启或构建中。页面会在约 3 分钟后自动刷新。', 'warn');
+                showToast('Docker 可能正在重启或构建中，请稍后刷新', 'info');
+                setTimeout(function () { location.reload(); }, reloadDelay);
+                return;
+            }
+            var output = err.data && err.data.output ? ('：' + err.data.output.slice(-160)) : '';
+            setVersionStatus((err.msg || '更新失败') + output, 'err');
+            showToast(err.msg || '更新失败', 'error');
+        });
 }
 
 function renderConnBookmarks() {
@@ -1572,6 +1649,32 @@ function tryAutoLogin() {
     }, 500);
 }
 
+// ==================== Local UI Preview ====================
+function initPreviewMode() {
+    var params = new URLSearchParams(location.search);
+    if (params.get('preview') !== 'terminal' && params.get('drawer') !== 'settings') return;
+
+    var host = params.get('host') || '54.209.196.41';
+    showView('terminalView');
+    setStatus('', 'UI 预览');
+    document.getElementById('tabBar').innerHTML =
+        '<div class="ssh-tab active"><span class="tab-ip">' + esc(host) + '</span><button class="tab-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
+    renderScriptBookmarks();
+
+    var drawer = params.get('drawer') || 'script';
+    if (drawer === 'script') {
+        document.getElementById('scriptDrawer').classList.add('open');
+    } else if (drawer === 'sftp') {
+        document.getElementById('sftpPanel').classList.add('open');
+    } else if (drawer === 'settings') {
+        var p = document.getElementById('settingsPanel');
+        var o = document.getElementById('settingsOverlay');
+        if (p && o) { p.classList.add('show'); o.classList.add('show'); }
+    } else if (drawer === 'auth') {
+        openAuthModal('login');
+    }
+}
+
 // ==================== Splash Screen ====================
 (function () {
     var splashStart = Date.now();
@@ -1607,6 +1710,7 @@ updateAccountUI();
 refreshAccountState();
 loadProxyConfig();
 tryAutoLogin();
+initPreviewMode();
 
 var authModalEl = document.getElementById('authModal');
 if (authModalEl) {
