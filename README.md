@@ -100,6 +100,7 @@ git pull && docker compose up -d --build
 #### 管理员账号与云端脚本书签
 
 WebSSH 会在首次启动时创建一个管理员账号，用于进入设置面板里的「版本更新」等管理员功能。
+登录后的账号可以在「账号同步」弹窗中修改自己的密码；修改时需要输入当前密码。
 
 - Docker Compose 默认用户名是 `admin`。
 - 如果没有设置 `WEBSSH_ADMIN_PASSWORD`，系统会自动生成随机密码，并只在首次启动时打印到 Docker 日志。

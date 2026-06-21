@@ -526,6 +526,24 @@
                         <button class="script-tool-btn" type="button" onclick="syncScriptBookmarks('push')">本地上传</button>
                         <button class="script-tool-btn" type="button" onclick="syncScriptBookmarks('pull')">云端拉取</button>
                     </div>
+                    <div class="auth-password-card">
+                        <div class="auth-section-title">修改密码</div>
+                        <div class="input-field">
+                            <label>当前密码</label>
+                            <input type="password" id="oldPassword" class="script-input" placeholder="输入当前密码" autocomplete="current-password">
+                        </div>
+                        <div class="input-row">
+                            <div class="input-field flex-1">
+                                <label>新密码</label>
+                                <input type="password" id="newPassword" class="script-input" placeholder="大于 6 位" autocomplete="new-password">
+                            </div>
+                            <div class="input-field flex-1">
+                                <label>确认新密码</label>
+                                <input type="password" id="confirmNewPassword" class="script-input" placeholder="再次输入" autocomplete="new-password">
+                            </div>
+                        </div>
+                        <button class="script-tool-btn primary auth-password-btn" type="button" onclick="changeAccountPassword()">保存新密码</button>
+                    </div>
                     <button class="drawer-add auth-submit-btn danger-inline" type="button" onclick="logoutAccount()">退出登录</button>
                 </div>
             </div>
@@ -538,6 +556,6 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
-    <script src="/static/js/app.js?v=40"></script>
+    <script src="/static/js/app.js?v=41"></script>
 </body>
 </html>

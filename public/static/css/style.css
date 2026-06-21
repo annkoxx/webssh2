@@ -382,6 +382,11 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 .auth-user-avatar{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 0 16px rgba(0,212,255,.16)}
 .auth-user-name{font-size:15px;font-weight:700;color:var(--t1)}
 .auth-sync-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-top:10px}
+.auth-password-card{margin-top:10px;padding:12px;border:1px solid var(--brd);border-radius:var(--rs);background:rgba(0,0,0,.08)}
+.auth-section-title{font-size:12px;font-weight:700;color:var(--c1);margin-bottom:10px}
+.auth-password-card .input-row{gap:8px}
+.auth-password-card .input-field{margin-bottom:8px}
+.auth-password-btn{width:100%;margin-top:2px}
 .danger-inline{border-color:rgba(255,0,110,.25)!important;color:var(--err)!important}
 .danger-inline:hover{background:rgba(255,0,110,.1)!important}
 

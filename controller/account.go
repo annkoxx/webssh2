@@ -460,6 +460,77 @@ func AuthLogin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "登录成功", "data": gin.H{"username": username, "isAdmin": user.IsAdmin}})
 }
 
+func AuthChangePassword(c *gin.Context) {
+	if accountStore == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "账号数据库未初始化"})
+		return
+	}
+	username, ok := requireAccount(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		OldPassword string `json:"oldPassword"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "请求格式不正确"})
+		return
+	}
+	oldPassword := strings.TrimSpace(req.OldPassword)
+	newPassword := strings.TrimSpace(req.NewPassword)
+	if oldPassword == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "请输入当前密码"})
+		return
+	}
+	if len(newPassword) < minPasswordLen {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "新密码必须大于 6 位"})
+		return
+	}
+
+	accountStore.mu.Lock()
+	user, exists := accountStore.db.Users[username]
+	accountStore.mu.Unlock()
+	if !exists {
+		clearLoginCookie(c)
+		c.JSON(http.StatusUnauthorized, gin.H{"ok": false, "msg": "账号不存在，请重新登录"})
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(oldPassword)) != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"ok": false, "msg": "当前密码错误"})
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "密码处理失败"})
+		return
+	}
+
+	currentToken, _ := c.Cookie(sessionCookieName)
+	accountStore.mu.Lock()
+	user, exists = accountStore.db.Users[username]
+	if !exists {
+		accountStore.mu.Unlock()
+		clearLoginCookie(c)
+		c.JSON(http.StatusUnauthorized, gin.H{"ok": false, "msg": "账号不存在，请重新登录"})
+		return
+	}
+	user.PasswordHash = string(hash)
+	accountStore.db.Users[username] = user
+	for token, sess := range accountStore.db.Sessions {
+		if sess.Username == username && token != currentToken {
+			delete(accountStore.db.Sessions, token)
+		}
+	}
+	if err := accountStore.saveLocked(); err != nil {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "密码保存失败"})
+		return
+	}
+	accountStore.mu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "密码已修改"})
+}
+
 func AuthLogout(c *gin.Context) {
 	if accountStore != nil {
 		if token, err := c.Cookie(sessionCookieName); err == nil && token != "" {

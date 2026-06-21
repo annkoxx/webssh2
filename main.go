@@ -101,6 +101,7 @@ func main() {
 		api.GET("/auth/me", controller.AuthMe)
 		api.POST("/auth/register", controller.AuthRegister)
 		api.POST("/auth/login", controller.AuthLogin)
+		api.POST("/auth/change-password", controller.AuthChangePassword)
 		api.POST("/auth/logout", controller.AuthLogout)
 		api.GET("/scripts", controller.GetScriptBookmarks)
 		api.POST("/scripts/sync", controller.SyncScriptBookmarks)

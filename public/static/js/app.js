@@ -591,6 +591,13 @@ function updateAccountUI() {
     }
 }
 
+function clearPasswordChangeForm() {
+    ['oldPassword', 'newPassword', 'confirmNewPassword'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+}
+
 function apiJSON(url, options) {
     options = options || {};
     options.credentials = 'same-origin';
@@ -621,6 +628,7 @@ function openAuthModal(mode) {
 
 function hideAuthModal() {
     document.getElementById('authModal').classList.remove('show');
+    clearPasswordChangeForm();
 }
 
 function switchAuthMode(mode) {
@@ -662,10 +670,34 @@ function logoutAccount() {
             currentAccount = null;
             accountAutoSynced = false;
             updateAccountUI();
+            clearPasswordChangeForm();
             hideAuthModal();
             showToast('已退出登录，本地书签仍保留在浏览器', 'info');
         })
         .catch(function (err) { showToast(err.msg || '退出失败', 'error'); });
+}
+
+function changeAccountPassword() {
+    if (!currentAccount || !currentAccount.username) {
+        openAuthModal('login');
+        showToast('请先登录后再修改密码', 'info');
+        return;
+    }
+    var oldPassword = document.getElementById('oldPassword').value.trim();
+    var newPassword = document.getElementById('newPassword').value.trim();
+    var confirmPassword = document.getElementById('confirmNewPassword').value.trim();
+    if (!oldPassword) { showToast('请输入当前密码', 'error'); return; }
+    if (newPassword.length < 7) { showToast('新密码必须大于 6 位', 'error'); return; }
+    if (newPassword !== confirmPassword) { showToast('两次输入的新密码不一致', 'error'); return; }
+    apiJSON('/api/auth/change-password', {
+        method: 'POST',
+        body: { oldPassword: oldPassword, newPassword: newPassword }
+    })
+        .then(function (res) {
+            clearPasswordChangeForm();
+            showToast(res.msg || '密码已修改', 'success');
+        })
+        .catch(function (err) { showToast(err.msg || '密码修改失败', 'error'); });
 }
 
 function refreshAccountState() {
@@ -1722,6 +1754,12 @@ if (authModalEl) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') submitAuthForm();
+    });
+});
+['oldPassword', 'newPassword', 'confirmNewPassword'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') changeAccountPassword();
     });
 });
 
