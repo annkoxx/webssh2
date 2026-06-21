@@ -234,13 +234,15 @@ function switchTab(idx) {
 
 function renderTabs() {
     var bar = document.getElementById('tabBar');
+    var addBtn = '<button class="tab-add-btn" onclick="event.stopPropagation();showAddTab()" title="新建连接">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>';
     bar.innerHTML = sessions.map(function (s, i) {
         var cls = i === activeIdx ? 'ssh-tab active' : 'ssh-tab';
         return '<div class="' + cls + '" onclick="switchTab(' + i + ')">' +
             '<span class="tab-ip" ondblclick="event.stopPropagation();copyIP(\'' + esc(s.hostname) + '\')" title="双击复制IP">' + esc(s.hostname) + '</span>' +
             '<button class="tab-close" onclick="event.stopPropagation();closeTab(' + i + ')">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
-    }).join('');
+    }).join('') + addBtn;
 }
 
 function updateMetricsForActive() {
@@ -441,6 +443,7 @@ var SBK_UPDATED = 'webssh_script_bm_updated_at';
 var currentAccount = null;
 var authMode = 'login';
 var accountAutoSynced = false;
+var scriptSyncTimer = null;
 
 function loadBM(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch (e) { return []; } }
 function getScriptUpdatedAt() { return parseInt(localStorage.getItem(SBK_UPDATED)) || 0; }
@@ -752,9 +755,14 @@ function syncScriptBookmarks(mode, silent) {
         .then(function (res) {
             var d = res.data || {};
             var scripts = normalizeCloudScripts(d.scripts);
-            saveScriptBookmarksData(scripts, d.updatedAt || Date.now());
-            renderScriptBookmarks();
-            updateAccountUI();
+            var shouldRender = !silent || d.mode === 'pull';
+            if (shouldRender) {
+                saveScriptBookmarksData(scripts, d.updatedAt || Date.now());
+                renderScriptBookmarks();
+                updateAccountUI();
+            } else if (d.updatedAt) {
+                setScriptUpdatedAt(d.updatedAt);
+            }
             var msg = '书签已是最新';
             if (d.mode === 'push') msg = '本地书签已同步到云端';
             else if (d.mode === 'pull') msg = '云端书签已同步到本地';
@@ -769,7 +777,11 @@ function syncScriptBookmarks(mode, silent) {
 
 function syncLocalScriptsIfLogged() {
     if (!currentAccount || !currentAccount.username) return;
-    setTimeout(function () { syncScriptBookmarks('push', true); }, 80);
+    if (scriptSyncTimer) clearTimeout(scriptSyncTimer);
+    scriptSyncTimer = setTimeout(function () {
+        scriptSyncTimer = null;
+        syncScriptBookmarks('push', true);
+    }, 350);
 }
 
 function setVersionStatus(text, cls) {
@@ -787,7 +799,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.2');
+    var current = clean(data.currentVersion || data.current, '0.5.3');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
