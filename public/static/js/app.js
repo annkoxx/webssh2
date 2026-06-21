@@ -100,6 +100,10 @@ document.addEventListener('keydown', function (e) {
         if (authModal && authModal.classList.contains('show')) { hideAuthModal(); return; }
         var editScriptModal = document.getElementById('editScriptModal');
         if (editScriptModal && editScriptModal.classList.contains('show')) { hideEditScriptModal(); return; }
+        var accountEditModal = document.getElementById('accountEditModal');
+        if (accountEditModal && accountEditModal.classList.contains('show')) { hideAccountEditModal(); return; }
+        var accountAdminModal = document.getElementById('accountAdminModal');
+        if (accountAdminModal && accountAdminModal.classList.contains('show')) { hideAccountAdminModal(); return; }
         var addTabModal = document.getElementById('addTabModal');
         if (addTabModal && addTabModal.classList.contains('show')) { hideAddTab(); return; }
     }
@@ -243,6 +247,27 @@ function renderTabs() {
             '<button class="tab-close" onclick="event.stopPropagation();closeTab(' + i + ')">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>';
     }).join('') + addBtn;
+    keepActiveTabVisible();
+}
+
+function keepActiveTabVisible() {
+    var bar = document.getElementById('tabBar');
+    if (!bar) return;
+    requestAnimationFrame(function () {
+        var active = bar.querySelector('.ssh-tab.active');
+        if (!active) return;
+        var isColumn = getComputedStyle(bar).flexDirection === 'column';
+        if (isColumn) {
+            active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            return;
+        }
+        if (activeIdx === sessions.length - 1) {
+            bar.scrollLeft = bar.scrollWidth;
+            setTimeout(function () { bar.scrollLeft = bar.scrollWidth; }, 30);
+        } else {
+            active.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        }
+    });
 }
 
 function updateMetricsForActive() {
@@ -444,6 +469,8 @@ var currentAccount = null;
 var authMode = 'login';
 var accountAutoSynced = false;
 var scriptSyncTimer = null;
+var managedAccounts = [];
+var editingManagedAccount = null;
 
 function loadBM(k) { try { return JSON.parse(localStorage.getItem(k)) || []; } catch (e) { return []; } }
 function getScriptUpdatedAt() { return parseInt(localStorage.getItem(SBK_UPDATED)) || 0; }
@@ -597,6 +624,10 @@ function updateAccountUI() {
             btn.classList.remove('logged-in');
         }
     }
+    var adminBtn = document.getElementById('accountAdminBtn');
+    if (adminBtn) {
+        adminBtn.classList.toggle('show', !!(currentAccount && currentAccount.isAdmin));
+    }
     var loggedIn = document.getElementById('authLoggedIn');
     var loggedOut = document.getElementById('authLoggedOut');
     var name = document.getElementById('authUserName');
@@ -721,6 +752,188 @@ function changeAccountPassword() {
         .catch(function (err) { showToast(err.msg || '密码修改失败', 'error'); });
 }
 
+function requireAdminAccountAccess() {
+    if (!currentAccount || !currentAccount.username) {
+        openAuthModal('login');
+        showToast('请先登录管理员账号', 'info');
+        return false;
+    }
+    if (!currentAccount.isAdmin) {
+        showToast('只有管理员可以管理服务器账号', 'error');
+        return false;
+    }
+    return true;
+}
+
+function openAccountAdminModal() {
+    if (!requireAdminAccountAccess()) return;
+    hideAuthModal();
+    var modal = document.getElementById('accountAdminModal');
+    if (modal) modal.classList.add('show');
+    loadManagedAccounts();
+}
+
+function hideAccountAdminModal() {
+    var modal = document.getElementById('accountAdminModal');
+    if (modal) modal.classList.remove('show');
+    clearManagedAccountCreateForm();
+}
+
+function clearManagedAccountCreateForm() {
+    ['managedNewUsername', 'managedNewPassword'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+    var admin = document.getElementById('managedNewIsAdmin');
+    if (admin) admin.checked = false;
+}
+
+function formatAccountTime(ts) {
+    ts = parseInt(ts) || 0;
+    if (!ts) return '未知时间';
+    if (ts < 100000000000) ts *= 1000;
+    try {
+        return new Date(ts).toLocaleString('zh-CN', { hour12: false });
+    } catch (e) {
+        return '未知时间';
+    }
+}
+
+function updateManagedAccounts(data) {
+    data = data || {};
+    managedAccounts = Array.isArray(data.users) ? data.users : [];
+    renderManagedAccounts();
+}
+
+function loadManagedAccounts() {
+    if (!requireAdminAccountAccess()) return;
+    var list = document.getElementById('managedAccountList');
+    if (list) list.innerHTML = '<div class="auth-hint">正在读取账号列表...</div>';
+    apiJSON('/api/admin/accounts')
+        .then(function (res) { updateManagedAccounts(res.data || {}); })
+        .catch(function (err) {
+            if (list) list.innerHTML = '<div class="account-empty">读取失败：' + esc(err.msg || '请求失败') + '</div>';
+            showToast(err.msg || '账号列表读取失败', 'error');
+            refreshAccountState();
+        });
+}
+
+function renderManagedAccounts() {
+    var list = document.getElementById('managedAccountList');
+    if (!list) return;
+    if (!managedAccounts.length) {
+        list.innerHTML = '<div class="account-empty">暂无账号</div>';
+        return;
+    }
+    list.innerHTML = managedAccounts.map(function (u) {
+        var username = u.username || '';
+        var badges = '';
+        if (u.isAdmin) badges += '<span class="account-badge admin">管理员</span>';
+        if (u.current) badges += '<span class="account-badge current">当前</span>';
+        var meta = '创建：' + formatAccountTime(u.createdAt) +
+            ' · 脚本 ' + (parseInt(u.scriptCount) || 0) + ' 个' +
+            ' · 登录会话 ' + (parseInt(u.sessionCount) || 0) + ' 个';
+        return '<div class="account-row">' +
+            '<div class="account-row-main">' +
+            '<div class="account-row-title"><span class="account-row-name">' + esc(username) + '</span>' + badges + '</div>' +
+            '<div class="account-row-meta">' + esc(meta) + '</div>' +
+            '</div>' +
+            '<div class="account-row-actions">' +
+            '<button class="script-tool-btn" type="button" onclick="openAccountEdit(\'' + esc(username) + '\')">编辑</button>' +
+            '<button class="script-tool-btn danger-inline" type="button" onclick="deleteManagedAccount(\'' + esc(username) + '\')">删除</button>' +
+            '</div>' +
+            '</div>';
+    }).join('');
+}
+
+function createManagedAccount() {
+    if (!requireAdminAccountAccess()) return;
+    var username = document.getElementById('managedNewUsername').value.trim();
+    var password = document.getElementById('managedNewPassword').value.trim();
+    var isAdmin = document.getElementById('managedNewIsAdmin').checked;
+    if (!/^[A-Za-z0-9]{5,32}$/.test(username)) { showToast('用户名只能使用 5-32 位字母或数字', 'error'); return; }
+    if (password.length < 7) { showToast('密码必须大于 6 位', 'error'); return; }
+    apiJSON('/api/admin/accounts', {
+        method: 'POST',
+        body: { username: username, password: password, isAdmin: isAdmin }
+    })
+        .then(function (res) {
+            clearManagedAccountCreateForm();
+            updateManagedAccounts(res.data || {});
+            showToast(res.msg || '账号已创建', 'success');
+        })
+        .catch(function (err) { showToast(err.msg || '账号创建失败', 'error'); });
+}
+
+function findManagedAccount(username) {
+    username = String(username || '').toLowerCase();
+    for (var i = 0; i < managedAccounts.length; i++) {
+        if ((managedAccounts[i].username || '').toLowerCase() === username) return managedAccounts[i];
+    }
+    return null;
+}
+
+function openAccountEdit(username) {
+    if (!requireAdminAccountAccess()) return;
+    var acc = findManagedAccount(username);
+    if (!acc) { showToast('账号不存在，请刷新列表', 'error'); return; }
+    editingManagedAccount = acc.username;
+    document.getElementById('managedEditUsername').value = acc.username;
+    document.getElementById('managedEditPassword').value = '';
+    document.getElementById('managedEditIsAdmin').checked = !!acc.isAdmin;
+    document.getElementById('accountEditModal').classList.add('show');
+}
+
+function hideAccountEditModal() {
+    editingManagedAccount = null;
+    var modal = document.getElementById('accountEditModal');
+    if (modal) modal.classList.remove('show');
+    var pwd = document.getElementById('managedEditPassword');
+    if (pwd) pwd.value = '';
+}
+
+function saveManagedAccount() {
+    if (!requireAdminAccountAccess()) return;
+    var username = (editingManagedAccount || document.getElementById('managedEditUsername').value || '').trim();
+    var password = document.getElementById('managedEditPassword').value.trim();
+    var isAdmin = document.getElementById('managedEditIsAdmin').checked;
+    if (!username) { showToast('账号不能为空', 'error'); return; }
+    if (password && password.length < 7) { showToast('新密码必须大于 6 位', 'error'); return; }
+    apiJSON('/api/admin/accounts', {
+        method: 'PUT',
+        body: { username: username, password: password, isAdmin: isAdmin }
+    })
+        .then(function (res) {
+            updateManagedAccounts(res.data || {});
+            hideAccountEditModal();
+            if (currentAccount && currentAccount.username === username) refreshAccountState();
+            showToast(res.msg || '账号已更新', 'success');
+        })
+        .catch(function (err) { showToast(err.msg || '账号更新失败', 'error'); });
+}
+
+function deleteManagedAccount(username) {
+    if (!requireAdminAccountAccess()) return;
+    var acc = findManagedAccount(username);
+    if (!acc) { showToast('账号不存在，请刷新列表', 'error'); return; }
+    var tips = acc.current ? '这是当前登录账号，删除后会退出登录。' : '该账号的云端脚本和登录会话也会删除。';
+    if (!confirm('确定删除账号 ' + acc.username + ' 吗？\n' + tips)) return;
+    apiJSON('/api/admin/accounts/' + encodeURIComponent(acc.username), { method: 'DELETE' })
+        .then(function (res) {
+            updateManagedAccounts(res.data || {});
+            if (currentAccount && currentAccount.username === acc.username) {
+                currentAccount = null;
+                updateAccountUI();
+                hideAccountEditModal();
+                hideAccountAdminModal();
+            } else {
+                refreshAccountState();
+            }
+            showToast(res.msg || '账号已删除', 'success');
+        })
+        .catch(function (err) { showToast(err.msg || '账号删除失败', 'error'); });
+}
+
 function refreshAccountState() {
     apiJSON('/api/auth/me')
         .then(function (res) {
@@ -799,7 +1012,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.3');
+    var current = clean(data.currentVersion || data.current, '0.5.4');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;

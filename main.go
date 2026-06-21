@@ -105,6 +105,10 @@ func main() {
 		api.POST("/auth/logout", controller.AuthLogout)
 		api.GET("/scripts", controller.GetScriptBookmarks)
 		api.POST("/scripts/sync", controller.SyncScriptBookmarks)
+		api.GET("/admin/accounts", controller.AdminListAccounts)
+		api.POST("/admin/accounts", controller.AdminCreateAccount)
+		api.PUT("/admin/accounts", controller.AdminUpdateAccount)
+		api.DELETE("/admin/accounts/:username", controller.AdminDeleteAccount)
 		api.GET("/admin/version", controller.AdminVersion)
 		api.POST("/admin/update", controller.AdminUpdate)
 	}

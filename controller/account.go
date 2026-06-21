@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,15 @@ type ScriptBookmark struct {
 type StoredScripts struct {
 	Items     []ScriptBookmark `json:"items"`
 	UpdatedAt int64            `json:"updatedAt"`
+}
+
+type accountSummary struct {
+	Username     string `json:"username"`
+	CreatedAt    int64  `json:"createdAt"`
+	IsAdmin      bool   `json:"isAdmin"`
+	ScriptCount  int    `json:"scriptCount"`
+	SessionCount int    `json:"sessionCount"`
+	Current      bool   `json:"current"`
 }
 
 type accountDB struct {
@@ -202,6 +212,54 @@ func (s *AccountStore) hasAdminLocked() bool {
 	return false
 }
 
+func (s *AccountStore) adminCountLocked() int {
+	count := 0
+	for _, user := range s.db.Users {
+		if user.IsAdmin {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *AccountStore) accountSummariesLocked(currentUsername string) []accountSummary {
+	s.ensureMaps()
+	now := time.Now().Unix()
+	sessionCounts := map[string]int{}
+	for _, sess := range s.db.Sessions {
+		if sess.ExpiresAt > now {
+			sessionCounts[sess.Username]++
+		}
+	}
+	users := make([]accountSummary, 0, len(s.db.Users))
+	for _, user := range s.db.Users {
+		scripts := s.db.Scripts[user.Username]
+		users = append(users, accountSummary{
+			Username:     user.Username,
+			CreatedAt:    user.CreatedAt,
+			IsAdmin:      user.IsAdmin,
+			ScriptCount:  len(scripts.Items),
+			SessionCount: sessionCounts[user.Username],
+			Current:      user.Username == currentUsername,
+		})
+	}
+	sort.Slice(users, func(i, j int) bool {
+		if users[i].IsAdmin != users[j].IsAdmin {
+			return users[i].IsAdmin
+		}
+		return users[i].Username < users[j].Username
+	})
+	return users
+}
+
+func (s *AccountStore) deleteUserSessionsLocked(username, exceptToken string) {
+	for token, sess := range s.db.Sessions {
+		if sess.Username == username && token != exceptToken {
+			delete(s.db.Sessions, token)
+		}
+	}
+}
+
 func (s *AccountStore) saveAdminLocked(username, password string, created bool) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -271,16 +329,24 @@ func (s *AccountStore) ensureDefaultAdminLocked() error {
 	return nil
 }
 
-func validateAccount(username, password string) (string, string, string) {
+func normalizeAccountUsername(username string) (string, string) {
 	username = strings.TrimSpace(username)
-	password = strings.TrimSpace(password)
 	if !usernameRule.MatchString(username) {
-		return "", "", "用户名只能使用 5-32 位字母或数字"
+		return "", "用户名只能使用 5-32 位字母或数字"
 	}
+	return strings.ToLower(username), ""
+}
+
+func validateAccount(username, password string) (string, string, string) {
+	username, msg := normalizeAccountUsername(username)
+	if msg != "" {
+		return "", "", msg
+	}
+	password = strings.TrimSpace(password)
 	if len(password) < minPasswordLen {
 		return "", "", "密码必须大于 6 位"
 	}
-	return strings.ToLower(username), password, ""
+	return username, password, ""
 }
 
 func newSessionToken() (string, error) {
@@ -555,6 +621,172 @@ func AuthMe(c *gin.Context) {
 	user := accountStore.db.Users[username]
 	accountStore.mu.Unlock()
 	c.JSON(http.StatusOK, gin.H{"ok": true, "data": gin.H{"loggedIn": true, "username": username, "isAdmin": user.IsAdmin}})
+}
+
+func AdminListAccounts(c *gin.Context) {
+	adminUsername, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	accountStore.mu.Lock()
+	users := accountStore.accountSummariesLocked(adminUsername)
+	adminCount := accountStore.adminCountLocked()
+	accountStore.mu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"ok": true, "data": gin.H{"users": users, "adminCount": adminCount}})
+}
+
+func AdminCreateAccount(c *gin.Context) {
+	adminUsername, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		IsAdmin  bool   `json:"isAdmin"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "请求格式不正确"})
+		return
+	}
+	username, password, msg := validateAccount(req.Username, req.Password)
+	if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": msg})
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "密码处理失败"})
+		return
+	}
+
+	accountStore.mu.Lock()
+	if _, exists := accountStore.db.Users[username]; exists {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusConflict, gin.H{"ok": false, "msg": "用户名已存在"})
+		return
+	}
+	accountStore.db.Users[username] = StoredUser{
+		Username:     username,
+		PasswordHash: string(hash),
+		CreatedAt:    time.Now().UnixMilli(),
+		IsAdmin:      req.IsAdmin,
+	}
+	if err := accountStore.saveLocked(); err != nil {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "账号保存失败"})
+		return
+	}
+	users := accountStore.accountSummariesLocked(adminUsername)
+	adminCount := accountStore.adminCountLocked()
+	accountStore.mu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "账号已创建", "data": gin.H{"users": users, "adminCount": adminCount}})
+}
+
+func AdminUpdateAccount(c *gin.Context) {
+	adminUsername, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+		IsAdmin  *bool  `json:"isAdmin"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "请求格式不正确"})
+		return
+	}
+	username, msg := normalizeAccountUsername(req.Username)
+	if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": msg})
+		return
+	}
+	password := strings.TrimSpace(req.Password)
+	if password != "" && len(password) < minPasswordLen {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "密码必须大于 6 位"})
+		return
+	}
+	var hash []byte
+	var err error
+	if password != "" {
+		hash, err = bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "密码处理失败"})
+			return
+		}
+	}
+	currentToken, _ := c.Cookie(sessionCookieName)
+
+	accountStore.mu.Lock()
+	user, exists := accountStore.db.Users[username]
+	if !exists {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusNotFound, gin.H{"ok": false, "msg": "账号不存在"})
+		return
+	}
+	if req.IsAdmin != nil && user.IsAdmin && !*req.IsAdmin && accountStore.adminCountLocked() <= 1 {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "至少需要保留一个管理员账号"})
+		return
+	}
+	if req.IsAdmin != nil {
+		user.IsAdmin = *req.IsAdmin
+	}
+	if password != "" {
+		user.PasswordHash = string(hash)
+		accountStore.deleteUserSessionsLocked(username, currentToken)
+	}
+	accountStore.db.Users[username] = user
+	if err := accountStore.saveLocked(); err != nil {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "账号保存失败"})
+		return
+	}
+	users := accountStore.accountSummariesLocked(adminUsername)
+	adminCount := accountStore.adminCountLocked()
+	accountStore.mu.Unlock()
+	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "账号已更新", "data": gin.H{"users": users, "adminCount": adminCount}})
+}
+
+func AdminDeleteAccount(c *gin.Context) {
+	adminUsername, ok := requireAdmin(c)
+	if !ok {
+		return
+	}
+	username, msg := normalizeAccountUsername(c.Param("username"))
+	if msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": msg})
+		return
+	}
+
+	accountStore.mu.Lock()
+	user, exists := accountStore.db.Users[username]
+	if !exists {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusNotFound, gin.H{"ok": false, "msg": "账号不存在"})
+		return
+	}
+	if user.IsAdmin && accountStore.adminCountLocked() <= 1 {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusBadRequest, gin.H{"ok": false, "msg": "至少需要保留一个管理员账号"})
+		return
+	}
+	delete(accountStore.db.Users, username)
+	delete(accountStore.db.Scripts, username)
+	accountStore.deleteUserSessionsLocked(username, "")
+	if err := accountStore.saveLocked(); err != nil {
+		accountStore.mu.Unlock()
+		c.JSON(http.StatusInternalServerError, gin.H{"ok": false, "msg": "账号删除失败"})
+		return
+	}
+	users := accountStore.accountSummariesLocked(adminUsername)
+	adminCount := accountStore.adminCountLocked()
+	accountStore.mu.Unlock()
+	if username == adminUsername {
+		clearLoginCookie(c)
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "msg": "账号已删除", "data": gin.H{"users": users, "adminCount": adminCount}})
 }
 
 func sanitizeScriptBookmarks(items []ScriptBookmark) []ScriptBookmark {
