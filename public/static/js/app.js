@@ -109,6 +109,8 @@ document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
         var serverInfoDetailModal = document.getElementById('serverInfoDetailModal');
         if (serverInfoDetailModal && serverInfoDetailModal.classList.contains('show')) { hideServerInfoDetailModal(); return; }
+        var sshAuthRetryModal = document.getElementById('sshAuthRetryModal');
+        if (sshAuthRetryModal && sshAuthRetryModal.classList.contains('show')) { hideSSHAuthRetryModal(true); return; }
         var authModal = document.getElementById('authModal');
         if (authModal && authModal.classList.contains('show')) { hideAuthModal(); return; }
         var editScriptModal = document.getElementById('editScriptModal');
@@ -205,8 +207,42 @@ function buildSSHInfoDirect(host, port, user, pass) {
     return btoa(unescape(encodeURIComponent(JSON.stringify(info))));
 }
 
+function stripAnsiText(s) {
+    return String(s || '').replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+function isPasswordAuthFailure(msg, session) {
+    if (session && session.authType === 'key') return false;
+    var t = stripAnsiText(msg).toLowerCase();
+    if (!t) return false;
+    var authLike = t.indexOf('unable to authenticate') >= 0 ||
+        t.indexOf('permission denied') >= 0 ||
+        t.indexOf('authentication failed') >= 0 ||
+        t.indexOf('auth fail') >= 0 ||
+        t.indexOf('no supported methods remain') >= 0;
+    var passwordLike = t.indexOf('password') >= 0 ||
+        t.indexOf('keyboard-interactive') >= 0 ||
+        t.indexOf('authenticate') >= 0 ||
+        t.indexOf('permission denied') >= 0;
+    return authLike && passwordLike;
+}
+
+function isSSHPreConnectFailure(msg) {
+    var t = stripAnsiText(msg).toLowerCase();
+    if (!t) return false;
+    return t.indexOf('ssh info parse error') >= 0 ||
+        t.indexOf('ssh: handshake failed') >= 0 ||
+        t.indexOf('connection refused') >= 0 ||
+        t.indexOf('i/o timeout') >= 0 ||
+        t.indexOf('no route to host') >= 0 ||
+        t.indexOf('network is unreachable') >= 0 ||
+        t.indexOf('connection timed out') >= 0 ||
+        t.indexOf('connect:') >= 0;
+}
+
 // ==================== Multi-Tab Session Management ====================
-function createSession(hostname, port, username, sshInfo) {
+function createSession(hostname, port, username, sshInfo, opts) {
+    opts = opts || {};
     var id = Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     var termDiv = document.createElement('div');
     termDiv.className = 'term-instance';
@@ -230,7 +266,11 @@ function createSession(hostname, port, username, sshInfo) {
     var session = {
         id: id, hostname: hostname, port: port, username: username,
         sshInfo: sshInfo, ws: null, term: t, fitAddon: fa, termDiv: termDiv,
-        heartbeat: null, sysInfoTimer: null, resizeObs: null
+        heartbeat: null, sysInfoTimer: null, resizeObs: null,
+        authType: opts.authType || 'password',
+        authRetry: null,
+        _connected: false,
+        _dataDisposable: null
     };
 
     session.resizeObs = new ResizeObserver(function () { try { fa.fit(); } catch (e) { } });
@@ -240,8 +280,9 @@ function createSession(hostname, port, username, sshInfo) {
     return session;
 }
 
-function switchTab(idx) {
+function switchTab(idx, userActivated) {
     if (idx < 0 || idx >= sessions.length) return;
+    var prevIdx = activeIdx;
     activeIdx = idx;
     sessions.forEach(function (s, i) {
         if (i === idx) { s.termDiv.classList.add('active'); }
@@ -252,6 +293,8 @@ function switchTab(idx) {
     setTimeout(function () { try { s.fitAddon.fit(); s.term.focus(); } catch (e) { } }, 100);
     updateMetricsForActive();
     updateFontSizeLabel();
+    if ((prevIdx !== idx || userActivated) && s.authRetry) s.authRetry.dismissed = false;
+    updateSSHAuthRetryModalForActive();
 }
 
 function renderTabs() {
@@ -260,8 +303,8 @@ function renderTabs() {
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>';
     bar.innerHTML = sessions.map(function (s, i) {
         var cls = i === activeIdx ? 'ssh-tab active' : 'ssh-tab';
-        return '<div class="' + cls + '" onclick="switchTab(' + i + ')">' +
-            '<span class="tab-ip" onclick="event.stopPropagation();switchTab(' + i + ');copyIP(sessions[' + i + '].hostname)" title="点击复制 IP">' + esc(s.hostname) + '</span>' +
+        return '<div class="' + cls + '" onclick="switchTab(' + i + ',true)">' +
+            '<span class="tab-ip" onclick="event.stopPropagation();switchTab(' + i + ',true);copyIP(sessions[' + i + '].hostname)" title="点击复制 IP">' + esc(s.hostname) + '</span>' +
             '<button class="tab-info" onclick="event.stopPropagation();openServerInfoModal(' + i + ')" title="服务器详情">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="10" x2="12" y2="16"/><circle cx="12" cy="7" r="1"/></svg></button>' +
             '<button class="tab-close" onclick="event.stopPropagation();closeTab(' + i + ')">' +
@@ -332,19 +375,127 @@ function updateMetricsForActive() {
 }
 
 // ==================== Connect ====================
+function getActiveSSHAuthRetrySession() {
+    return activeIdx >= 0 && sessions[activeIdx] ? sessions[activeIdx] : null;
+}
+
+function setSSHAuthRetryError(text) {
+    var el = document.getElementById('sshAuthRetryError');
+    if (!el) return;
+    if (text) {
+        el.textContent = text;
+        el.classList.add('show');
+    } else {
+        el.textContent = '';
+        el.classList.remove('show');
+    }
+}
+
+function showSSHAuthRetryModal(session) {
+    if (!session || !session.authRetry) return;
+    var modal = document.getElementById('sshAuthRetryModal');
+    if (!modal) return;
+    document.getElementById('retryHost').value = session.hostname || '';
+    document.getElementById('retryPort').value = session.port || 22;
+    document.getElementById('retryUser').value = session.username || 'root';
+    document.getElementById('retryPass').value = '';
+    var hint = document.getElementById('sshAuthRetryHint');
+    if (hint) hint.textContent = '密码认证失败，请检查并修改 ' + (session.username || 'root') + '@' + (session.hostname || '-') + ':' + (session.port || 22) + ' 的登录信息。';
+    setSSHAuthRetryError(session.authRetry.error || '请修改正确的密码后重新连接。');
+    modal.classList.add('show');
+    setTimeout(function () {
+        var pass = document.getElementById('retryPass');
+        if (pass) pass.focus();
+    }, 60);
+}
+
+function hideSSHAuthRetryModal(dismiss) {
+    var modal = document.getElementById('sshAuthRetryModal');
+    if (modal) modal.classList.remove('show');
+    setSSHAuthRetryError('');
+    if (dismiss) {
+        var s = getActiveSSHAuthRetrySession();
+        if (s && s.authRetry) s.authRetry.dismissed = true;
+    }
+}
+
+function updateSSHAuthRetryModalForActive() {
+    var s = getActiveSSHAuthRetrySession();
+    if (s && s.authRetry && !s.authRetry.dismissed) {
+        showSSHAuthRetryModal(s);
+        return;
+    }
+    hideSSHAuthRetryModal(false);
+}
+
+function handleSSHAuthFailure(session, rawMessage) {
+    var msg = stripAnsiText(rawMessage) || '密码认证失败';
+    session.authRetry = { error: msg, dismissed: false, ts: Date.now() };
+    showToast(session.hostname + ' 密码认证失败，请修改密码', 'error');
+    if (sessions[activeIdx] === session) updateSSHAuthRetryModalForActive();
+}
+
+function submitSSHAuthRetry() {
+    var s = getActiveSSHAuthRetrySession();
+    if (!s) return;
+    var host = document.getElementById('retryHost').value.trim();
+    var port = parseInt(document.getElementById('retryPort').value, 10) || 22;
+    var user = document.getElementById('retryUser').value.trim() || 'root';
+    var pass = document.getElementById('retryPass').value;
+    if (!host) { setSSHAuthRetryError('请填写主机地址。'); return; }
+    if (!pass) { setSSHAuthRetryError('请输入正确的密码。'); return; }
+    if (s.ws && (s.ws.readyState === 0 || s.ws.readyState === 1)) {
+        try { s.ws.close(); } catch (e) { }
+    }
+    s.hostname = host;
+    s.port = port;
+    s.username = user;
+    s.authType = 'password';
+    s.sshInfo = buildSSHInfoDirect(host, port, user, pass);
+    s.authRetry = null;
+    s._connected = false;
+    hideSSHAuthRetryModal(false);
+    renderTabs();
+    showToast('正在重新连接 ' + host + '...', 'info');
+    setTimeout(function () {
+        try { s.fitAddon.fit(); } catch (e) { }
+        connectSession(s);
+    }, 120);
+}
+
 function connectSession(session) {
+    if (session.heartbeat) { clearInterval(session.heartbeat); session.heartbeat = null; }
+    if (session._dataDisposable && typeof session._dataDisposable.dispose === 'function') {
+        try { session._dataDisposable.dispose(); } catch (e) { }
+        session._dataDisposable = null;
+    }
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     var cols = session.term.cols, rows = session.term.rows;
     var wsUrl = proto + '//' + location.host + '/term?cols=' + cols + '&rows=' + rows;
     var ws = new WebSocket(wsUrl);
     session.ws = ws;
-    var got = false;
+    session._connected = false;
+    var failedBeforeConnect = false;
 
     ws.onopen = function () { ws.send(session.sshInfo); };
 
     ws.onmessage = function (e) {
-        if (!got) {
-            got = true;
+        if (!session._connected) {
+            if (isPasswordAuthFailure(e.data, session)) {
+                failedBeforeConnect = true;
+                session.term.write(e.data);
+                handleSSHAuthFailure(session, e.data);
+                return;
+            }
+            if (isSSHPreConnectFailure(e.data)) {
+                failedBeforeConnect = true;
+                session.term.write(e.data);
+                showToast(session.hostname + ' 连接失败：' + stripAnsiText(e.data), 'error');
+                return;
+            }
+            session._connected = true;
+            session.authRetry = null;
+            updateSSHAuthRetryModalForActive();
             showToast(session.hostname + ' 连接成功', 'success');
             setupAutoCopy(session);
             maybeShowFirstServerInfoGuide(session);
@@ -358,10 +509,10 @@ function connectSession(session) {
     ws.onclose = function () {
         if (session.heartbeat) { clearInterval(session.heartbeat); session.heartbeat = null; }
         if (session.sysInfoTimer) { clearInterval(session.sysInfoTimer); session.sysInfoTimer = null; }
-        if (!got) showToast(session.hostname + ' 无法连接', 'error');
+        if (!session._connected && !failedBeforeConnect) showToast(session.hostname + ' 无法连接', 'error');
     };
 
-    session.term.onData(function (data) { if (ws.readyState === 1) ws.send(data); });
+    session._dataDisposable = session.term.onData(function (data) { if (ws.readyState === 1) ws.send(data); });
 
     var resizeHandler = function () {
         try { session.fitAddon.fit(); } catch (e) { }
@@ -377,11 +528,12 @@ function connectFromLogin() {
     setStatus('connecting', '连接中...');
 
     var sshInfo = buildSSHInfoFromForm();
+    var authType = document.querySelector('.auth-tab.active').dataset.tab;
     var h = document.getElementById('hostname').value.trim();
     var p = parseInt(document.getElementById('port').value) || 22;
     var u = document.getElementById('username').value.trim() || 'root';
 
-    var session = createSession(h, p, u, sshInfo);
+    var session = createSession(h, p, u, sshInfo, { authType: authType });
     showView('terminalView');
     switchTab(sessions.length - 1);
 
@@ -446,6 +598,7 @@ function closeTab(idx) {
     if (s.sysInfoTimer) clearInterval(s.sysInfoTimer);
     if (s.resizeObs) s.resizeObs.disconnect();
     if (s._resizeHandler) removeEventListener('resize', s._resizeHandler);
+    if (s._dataDisposable && typeof s._dataDisposable.dispose === 'function') { try { s._dataDisposable.dispose(); } catch (e) { } }
     if (s.term) s.term.dispose();
     if (s.termDiv) s.termDiv.remove();
     sessions.splice(idx, 1);
@@ -487,7 +640,7 @@ function addNewTab() {
     var pw = document.getElementById('newTabPass').value;
     if (!h) { showToast('请输入主机地址', 'error'); return; }
     var sshInfo = buildSSHInfoDirect(h, p, u, pw);
-    var session = createSession(h, parseInt(p), u, sshInfo);
+    var session = createSession(h, parseInt(p), u, sshInfo, { authType: 'password' });
     switchTab(sessions.length - 1);
     hideAddTab();
     setTimeout(function () {
@@ -1568,7 +1721,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.18');
+    var current = clean(data.currentVersion || data.current, '0.5.19');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
@@ -2966,6 +3119,12 @@ if (authModalEl) {
         if (e.target === authModalEl) hideAuthModal();
     });
 }
+var sshAuthRetryModalEl = document.getElementById('sshAuthRetryModal');
+if (sshAuthRetryModalEl) {
+    sshAuthRetryModalEl.addEventListener('click', function (e) {
+        if (e.target === sshAuthRetryModalEl) hideSSHAuthRetryModal(true);
+    });
+}
 var editScriptModalEl = document.getElementById('editScriptModal');
 if (editScriptModalEl) {
     editScriptModalEl.addEventListener('click', function (e) {
@@ -2976,6 +3135,12 @@ if (editScriptModalEl) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') submitAuthForm();
+    });
+});
+['retryHost', 'retryPort', 'retryUser', 'retryPass'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') submitSSHAuthRetry();
     });
 });
 ['editScriptName', 'editScriptContent'].forEach(function (id) {

@@ -394,6 +394,11 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 .script-edit-card{width:440px;max-width:min(92vw,440px)}
 .script-edit-body .script-input{font-size:13px;padding:9px 10px}
 .script-edit-body .script-textarea{min-height:132px;font-size:12px;line-height:1.55}
+.ssh-auth-retry-card{width:430px;max-width:min(92vw,430px)}
+.ssh-auth-retry-body .script-input{font-size:13px;padding:9px 10px}
+.ssh-auth-retry-hint{padding:10px 12px;border:1px solid rgba(255,190,11,.18);border-radius:var(--rs);background:rgba(255,190,11,.08);color:var(--warn);font-size:12px;line-height:1.55}
+.ssh-auth-retry-error{display:none;padding:9px 11px;border:1px solid rgba(255,0,110,.2);border-radius:var(--rs);background:rgba(255,0,110,.08);color:var(--err);font-size:11px;line-height:1.55;word-break:break-word}
+.ssh-auth-retry-error.show{display:block}
 .edit-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px}
 .edit-actions .drawer-add{margin:0;border-style:solid;padding:10px}
 .auth-card{width:400px;max-width:min(92vw,400px)}
