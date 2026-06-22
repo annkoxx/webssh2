@@ -387,7 +387,7 @@ input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;hei
 .term-instance .xterm-screen{overflow:hidden}
 
 /* ==================== MODAL ==================== */
-.modal-overlay{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.48);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);padding:16px}
+.modal-overlay{position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.48);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);padding:16px}
 .modal-overlay.show{display:flex}
 .modal-card{width:360px;max-width:90vw;padding:0;overflow:hidden}
 .modal-body{padding:14px;display:flex;flex-direction:column;gap:10px}
@@ -589,7 +589,7 @@ html[data-theme="light"] .server-net-canvas line{stroke:rgba(0,0,0,.08)}
 .server-net-axis .time-tick{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}
 .server-net-axis .time-tick.left-edge{transform:translateX(0)}
 .server-net-axis .time-tick.right-edge{transform:translateX(-100%)}
-.server-detail-pop-overlay{z-index:170;background:rgba(0,0,0,.58);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.server-detail-pop-overlay{z-index:1200;background:rgba(0,0,0,.58);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
 .server-detail-pop-card{width:min(980px,94vw);max-width:94vw;max-height:88dvh;display:flex;flex-direction:column;overflow:hidden;border-color:rgba(0,212,255,.2);background:linear-gradient(145deg,rgba(16,16,40,.96),rgba(9,9,24,.93));box-shadow:0 26px 88px rgba(0,0,0,.48),0 0 52px rgba(0,212,255,.08)}
 html[data-theme="light"] .server-detail-pop-card{background:linear-gradient(145deg,rgba(255,255,255,.94),rgba(238,245,255,.88));box-shadow:0 24px 70px rgba(18,26,48,.18)}
 .server-detail-pop-hd{padding:13px 15px}
