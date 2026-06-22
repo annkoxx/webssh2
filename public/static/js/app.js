@@ -702,7 +702,6 @@ function openServerInfoModal(idx) {
     if (s._lastMetrics) renderServerInfo(s._lastMetrics, s);
     else document.getElementById('serverInfoBody').innerHTML = '<div class="server-info-loading"><span></span>正在读取服务器信息...</div>';
     modal.classList.add('show');
-    fetchSysInfoFor(s);
     restartServerInfoTimer();
 }
 
@@ -723,9 +722,21 @@ function stopServerInfoTimer() {
 function restartServerInfoTimer() {
     stopServerInfoTimer();
     if (serverInfoModalIdx < 0 || !sessions[serverInfoModalIdx]) return;
-    serverInfoTimer = setInterval(function () {
-        if (serverInfoModalIdx >= 0 && sessions[serverInfoModalIdx]) fetchSysInfoFor(sessions[serverInfoModalIdx]);
-    }, getServerInfoRefreshSeconds() * 1000);
+    refreshOpenServerInfo();
+    serverInfoTimer = setInterval(refreshOpenServerInfo, getServerInfoRefreshSeconds() * 1000);
+}
+
+function refreshOpenServerInfo() {
+    if (serverInfoModalIdx < 0 || !sessions[serverInfoModalIdx]) return;
+    var s = sessions[serverInfoModalIdx];
+    if (s._serverInfoBusy) return;
+    s._serverInfoBusy = true;
+    var p = fetchSysInfoFor(s);
+    if (p && p.finally) {
+        p.finally(function () { s._serverInfoBusy = false; });
+    } else {
+        s._serverInfoBusy = false;
+    }
 }
 
 function changeServerInfoIface(name) {
@@ -770,6 +781,8 @@ function renderServerInfo(d, session) {
     var txRate = selectedIface ? selectedIface.txRate : d.txRate;
     var rxTotal = selectedIface ? selectedIface.rxTotal : d.rxTotal;
     var txTotal = selectedIface ? selectedIface.txTotal : d.txTotal;
+    var memPct = percentOf(d.memUsed, d.memTotal);
+    var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
     var netUnitToggle = '<div class="server-net-unit-toggle"><button type="button" class="' + (serverInfoNetUnit === 'bytes' ? 'active' : '') + '" onclick="changeServerNetUnit(\'bytes\')">MB/s</button><button type="button" class="' + (serverInfoNetUnit === 'bits' ? 'active' : '') + '" onclick="changeServerNetUnit(\'bits\')">Mbps</button></div>';
     body.innerHTML =
         '<div class="server-info-hero">' +
@@ -777,22 +790,21 @@ function renderServerInfo(d, session) {
         '<div class="server-info-live"><span></span>每 ' + getServerInfoRefreshSeconds() + ' 秒刷新</div>' +
         '</div>' +
         '<div class="server-info-grid">' +
-        '<div class="server-info-card wide"><h4>基础信息</h4><div class="server-info-facts">' +
-        '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>内核版本</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
+        '<div class="server-info-card wide network-card"><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
+        '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName) + '</div>' +
+        '<div class="server-info-card wide server-priority-card"><h4>进程</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div></div>' +
+        '<div class="server-info-card wide server-priority-card"><h4>文件系统</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>挂载点</th><th>已用/大小</th><th>使用率</th></tr></thead><tbody>' + fsRows + '</tbody></table></div></div>' +
+        '<div class="server-info-card wide server-summary-card"><h4>资源概览</h4><div class="server-summary-grid">' +
+        '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>' + esc(d.cpuCores || '?') + ' 核</small></div>' +
+        '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '</small></div>' +
+        '<div><span>磁盘</span><b>' + diskPct + '%</b><small>剩余 ' + fmtB(d.diskFree) + '</small></div>' +
+        '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small></div>' +
+        '</div><div class="server-info-mini">CPU：用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div></div>' +
+        '<div class="server-info-card wide server-facts-card"><h4>基础信息</h4><div class="server-info-facts">' +
+        '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
         '<div><span>主机名</span><b>' + esc(d.hostname || '-') + '</b></div><div><span>架构</span><b>' + esc(d.arch || '-') + '</b></div>' +
         '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div><div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
         '</div></div>' +
-        '<div class="server-info-card"><h4>CPU</h4><div class="srv-big">' + cpu.toFixed(1) + '%</div>' + meterHtml('CPU 使用率', cpu, 100, 'linear-gradient(90deg,#00d4ff,#7b2ff7)') +
-        '<div class="server-info-mini">用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div><div class="server-info-mini">' + esc(d.cpuCores || '?') + ' 核 · ' + esc(d.cpuModel || '-') + '</div></div>' +
-        '<div class="server-info-card"><h4>内存/交换</h4>' + meterHtml('内存 ' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal), d.memUsed, d.memTotal, 'linear-gradient(90deg,#ff006e,#ffbe0b)') +
-        meterHtml('Swap ' + fmtB(d.swapUsed) + ' / ' + fmtB(d.swapTotal), d.swapUsed, d.swapTotal, 'linear-gradient(90deg,#7b2ff7,#00d4ff)') +
-        '<div class="server-info-mini">可用 ' + fmtB(d.memAvailable || d.memFree) + '</div></div>' +
-        '<div class="server-info-card"><h4>磁盘</h4><div class="srv-big">' + diskPct + '%</div>' + meterHtml('根分区 ' + fmtB(d.diskUsed) + ' / ' + fmtB(d.diskTotal), d.diskUsed, d.diskTotal, 'linear-gradient(90deg,#00ff88,#00d4ff)') + '<div class="server-info-mini">剩余 ' + fmtB(d.diskFree) + '</div></div>' +
-        '<div class="server-info-card"><h4>连接</h4><div class="srv-big small">' + esc((parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0)) + '</div><div class="server-net-pair compact"><div><span>TCP</span><b>' + esc(d.tcpCount || '0') + '</b></div><div><span>UDP</span><b>' + esc(d.udpCount || '0') + '</b></div></div></div>' +
-        '<div class="server-info-card wide network-card"><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
-        '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName) + '</div>' +
-        '<div class="server-info-card wide"><h4>进程</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div></div>' +
-        '<div class="server-info-card wide"><h4>文件系统</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>挂载点</th><th>已用/大小</th><th>使用率</th></tr></thead><tbody>' + fsRows + '</tbody></table></div></div>' +
         '</div>';
 }
 
@@ -910,17 +922,18 @@ function importScriptBookmarks(input) {
                 seen[((b.name || '').trim()) + '\n' + ((b.cmd || '').trim())] = true;
             });
             var added = 0, skipped = 0;
+            var addedItems = [];
             incoming.forEach(function (b) {
                 var key = b.name + '\n' + b.cmd;
                 if (seen[key]) { skipped++; return; }
                 current.push(b);
+                addedItems.push(b);
                 seen[key] = true;
                 added++;
             });
             if (added) {
                 saveBM(SBK, current);
-                showPresets = false;
-                renderScriptBookmarks();
+                appendScriptBookmarkItems(addedItems, current.length - addedItems.length);
                 syncLocalScriptsIfLogged();
             }
             showToast(added ? ('已导入 ' + added + ' 个脚本') : ('没有新增脚本，跳过 ' + skipped + ' 个重复项'), added ? 'success' : 'info');
@@ -1318,19 +1331,14 @@ function syncScriptBookmarks(mode, silent) {
         .then(function (res) {
             var d = res.data || {};
             var scripts = normalizeCloudScripts(d.scripts);
-            var shouldRender = !silent || d.mode === 'pull';
-            if (shouldRender) {
-                saveScriptBookmarksData(scripts, d.updatedAt || Date.now());
-                renderScriptBookmarks();
-                updateAccountUI();
-            } else if (d.updatedAt) {
-                setScriptUpdatedAt(d.updatedAt);
-            }
+            var merged = mergeScriptBookmarksIncremental(scripts, d.updatedAt || Date.now());
+            updateAccountUI();
             var msg = '书签已是最新';
             if (d.mode === 'push') msg = '本地书签已同步到云端';
             else if (d.mode === 'pull') msg = '云端书签已同步到本地';
-            if (!silent) setCloudStatus(msg + ' · ' + scripts.length + ' 个脚本', 'synced', 3500);
-            if (!silent) showToast(msg + '（' + scripts.length + ' 个）', 'success');
+            if (merged.added) msg += '，新增 ' + merged.added + ' 个';
+            if (!silent) setCloudStatus(msg + ' · ' + merged.scripts.length + ' 个脚本', 'synced', 3500);
+            if (!silent) showToast(msg + '（' + merged.scripts.length + ' 个）', 'success');
         })
         .catch(function (err) {
             if (!silent) setCloudStatus('同步失败：' + (err.msg || '请稍后重试'), 'warn', 5000);
@@ -1362,7 +1370,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.11');
+    var current = clean(data.currentVersion || data.current, '0.5.12');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
@@ -1551,6 +1559,100 @@ var PRESET_SCRIPTS = [
 ];
 var showPresets = false;
 
+function scriptBookmarkKey(b) {
+    return ((b && b.name ? b.name : '').trim()) + '\n' + ((b && b.cmd ? b.cmd : '').trim());
+}
+
+function scriptBookmarkItemHtml(b, i) {
+    var name = b.name || '';
+    var cmd = b.cmd || '';
+    return '<div class="bm-item" data-script-row="1" data-script-index="' + i + '" onclick="runScript(' + i + ')" title="' + esc(cmd) + '"><div class="bm-item-info"><div class="bm-item-name">' + esc(name) + '</div><div class="bm-item-host">' + esc(cmd.substring(0, 35)) + '</div></div><div class="bm-item-actions"><span class="bm-item-run">▶</span><button class="bm-item-icon-btn bm-item-edit" title="编辑脚本" onclick="event.stopPropagation();openEditScriptModal(' + i + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg></button><button class="bm-item-del" title="删除脚本" onclick="event.stopPropagation();delScript(' + i + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>';
+}
+
+function makeScriptBookmarkNode(b, i) {
+    var t = document.createElement('template');
+    t.innerHTML = scriptBookmarkItemHtml(b, i).trim();
+    return t.content.firstElementChild;
+}
+
+function refreshScriptBookmarkIndices() {
+    var rows = document.querySelectorAll('#scriptBookmarkList .bm-item[data-script-row]:not(.removing)');
+    rows.forEach(function (row, i) {
+        row.dataset.scriptIndex = i;
+        row.setAttribute('onclick', 'runScript(' + i + ')');
+        var edit = row.querySelector('.bm-item-edit');
+        var del = row.querySelector('.bm-item-del');
+        if (edit) edit.setAttribute('onclick', 'event.stopPropagation();openEditScriptModal(' + i + ')');
+        if (del) del.setAttribute('onclick', 'event.stopPropagation();delScript(' + i + ')');
+    });
+}
+
+function ensureScriptEmptyState() {
+    var l = document.getElementById('scriptBookmarkList');
+    if (!l || showPresets) return;
+    var hasRows = !!l.querySelector('.bm-item[data-script-row]');
+    var empty = l.querySelector('.bm-empty');
+    if (hasRows && empty) empty.remove();
+    if (!hasRows && !empty) {
+        var div = document.createElement('div');
+        div.className = 'bm-empty';
+        div.textContent = '暂无自定义脚本';
+        l.appendChild(div);
+    }
+}
+
+function appendScriptBookmarkItems(items, startIndex) {
+    var l = document.getElementById('scriptBookmarkList');
+    if (!l || showPresets || !items || !items.length) return;
+    var empty = l.querySelector('.bm-empty');
+    if (empty) empty.remove();
+    var frag = document.createDocumentFragment();
+    items.forEach(function (b, offset) {
+        frag.appendChild(makeScriptBookmarkNode(b, startIndex + offset));
+    });
+    l.appendChild(frag);
+}
+
+function replaceScriptBookmarkRow(i, b) {
+    if (showPresets) return;
+    var row = document.querySelector('#scriptBookmarkList .bm-item[data-script-row][data-script-index="' + i + '"]');
+    if (!row) return;
+    row.replaceWith(makeScriptBookmarkNode(b, i));
+}
+
+function removeScriptBookmarkRow(i) {
+    if (showPresets) return;
+    var row = document.querySelector('#scriptBookmarkList .bm-item[data-script-row][data-script-index="' + i + '"]');
+    if (!row) return;
+    row.classList.add('removing');
+    refreshScriptBookmarkIndices();
+    setTimeout(function () {
+        if (row.parentNode) row.parentNode.removeChild(row);
+        refreshScriptBookmarkIndices();
+        ensureScriptEmptyState();
+    }, 160);
+}
+
+function mergeScriptBookmarksIncremental(incoming, updatedAt) {
+    incoming = normalizeCloudScripts(incoming);
+    var current = loadBM(SBK);
+    var seen = {};
+    current.forEach(function (b) { seen[scriptBookmarkKey(b)] = true; });
+    var added = [];
+    incoming.forEach(function (b) {
+        var key = scriptBookmarkKey(b);
+        if (!key.trim() || seen[key]) return;
+        current.push(b);
+        added.push(b);
+        seen[key] = true;
+    });
+    if (added.length || updatedAt) {
+        saveScriptBookmarksData(current, updatedAt || Date.now());
+    }
+    if (added.length) appendScriptBookmarkItems(added, current.length - added.length);
+    return { scripts: current, added: added.length };
+}
+
 function renderScriptBookmarks() {
     var l = document.getElementById('scriptBookmarkList'), bms = loadBM(SBK);
     var html = '';
@@ -1570,9 +1672,7 @@ function renderScriptBookmarks() {
     // User scripts
     if (bms.length) {
         html += bms.map(function (b, i) {
-            var name = b.name || '';
-            var cmd = b.cmd || '';
-            return '<div class="bm-item" onclick="runScript(' + i + ')" title="' + esc(cmd) + '"><div class="bm-item-info"><div class="bm-item-name">' + esc(name) + '</div><div class="bm-item-host">' + esc(cmd.substring(0, 35)) + '</div></div><div class="bm-item-actions"><span class="bm-item-run">▶</span><button class="bm-item-icon-btn bm-item-edit" title="编辑脚本" onclick="event.stopPropagation();openEditScriptModal(' + i + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg></button><button class="bm-item-del" title="删除脚本" onclick="event.stopPropagation();delScript(' + i + ')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="10" height="10"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>';
+            return scriptBookmarkItemHtml(b, i);
         }).join('');
     } else {
         html += '<div class="bm-empty">暂无自定义脚本</div>';
@@ -1590,9 +1690,11 @@ function runPresetScript(cmd) {
 function saveScriptBookmark() {
     var n = document.getElementById('scriptName').value.trim(), c = document.getElementById('scriptContent').value.trim();
     if (!n || !c) { showToast('名称和命令不能为空', 'error'); return; }
-    var bms = loadBM(SBK); bms.push({ name: n, cmd: c }); saveBM(SBK, bms);
+    var item = { name: n, cmd: c };
+    var bms = loadBM(SBK); bms.push(item); saveBM(SBK, bms);
     document.getElementById('scriptName').value = ''; document.getElementById('scriptContent').value = '';
-    renderScriptBookmarks(); syncLocalScriptsIfLogged(); showToast('脚本已保存', 'success');
+    appendScriptBookmarkItems([item], bms.length - 1);
+    syncLocalScriptsIfLogged(); showToast('脚本已保存', 'success');
 }
 
 function openEditScriptModal(i) {
@@ -1630,7 +1732,7 @@ function saveEditedScriptBookmark() {
     bms[idx] = Object.assign({}, bms[idx], { name: name, cmd: cmd });
     saveBM(SBK, bms);
     hideEditScriptModal();
-    renderScriptBookmarks();
+    replaceScriptBookmarkRow(idx, bms[idx]);
     syncLocalScriptsIfLogged();
     showToast('脚本已更新', 'success');
 }
@@ -1643,7 +1745,15 @@ function runScript(i) {
     sessions[activeIdx].term.focus();
 }
 
-function delScript(i) { var bms = loadBM(SBK); bms.splice(i, 1); saveBM(SBK, bms); renderScriptBookmarks(); syncLocalScriptsIfLogged(); showToast('已删除', 'info'); }
+function delScript(i) {
+    var bms = loadBM(SBK);
+    if (!bms[i]) return;
+    bms.splice(i, 1);
+    saveBM(SBK, bms);
+    removeScriptBookmarkRow(i);
+    syncLocalScriptsIfLogged();
+    showToast('已删除', 'info');
+}
 
 // ==================== SFTP ====================
 function sftpLoad(path) {
@@ -2026,7 +2136,7 @@ function getSysInterval() {
 }
 
 function getServerInfoRefreshSeconds() {
-    return Math.min(getSysInterval(), 5);
+    return 1;
 }
 
 function changeSysInterval(delta) {
