@@ -668,8 +668,8 @@ function buildNetLabels(items, key, max, width, height, pad, domainStart, domain
         var x = netPointX(item, idx, items, width, pad, domainStart, domainEnd);
         if (x - lastX < minGap && idx !== items.length - 1) return '';
         lastX = x;
-        var y = netPointY(item, key, max, height, pad) - 9;
-        y = Math.max(12, Math.min(height - pad - 12, y));
+        var y = netPointY(item, key, max, height, pad) + (cls === 'rx' ? 12 : -10);
+        y = Math.max(13, Math.min(height - pad - 8, y));
         var anchor = x < pad + 34 ? 'start' : (x > width - pad - 34 ? 'end' : 'middle');
         return '<text class="net-label ' + cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="' + anchor + '">' + esc(fmtNetRate(value)) + '</text>';
     }).join('');
@@ -1087,7 +1087,12 @@ function normalizeImportedScripts(items) {
         cmd = cmd.trim();
         if (!cmd) return;
         if (!name) name = '导入脚本 ' + (idx + 1);
-        out.push({ name: name, cmd: cmd });
+        var normalized = { name: name, cmd: cmd };
+        var useCount = parseScriptUseCount(item);
+        var lastUsed = parseScriptLastUsed(item);
+        if (useCount > 0) normalized.useCount = useCount;
+        if (lastUsed > 0) normalized.lastUsed = lastUsed;
+        out.push(normalized);
     });
     return out;
 }
@@ -1101,24 +1106,23 @@ function importScriptBookmarks(input) {
             var data = JSON.parse(reader.result);
             var incoming = normalizeImportedScripts(extractImportedScripts(data));
             if (!incoming.length) { showToast('未找到可导入的脚本书签', 'error'); return; }
-            var current = loadBM(SBK);
+            var current = loadSortedScriptBookmarks();
             var seen = {};
             current.forEach(function (b) {
                 seen[((b.name || '').trim()) + '\n' + ((b.cmd || '').trim())] = true;
             });
             var added = 0, skipped = 0;
-            var addedItems = [];
             incoming.forEach(function (b) {
                 var key = b.name + '\n' + b.cmd;
                 if (seen[key]) { skipped++; return; }
                 current.push(b);
-                addedItems.push(b);
                 seen[key] = true;
                 added++;
             });
             if (added) {
+                sortScriptBookmarks(current);
                 saveBM(SBK, current);
-                appendScriptBookmarkItems(addedItems, current.length - addedItems.length);
+                renderScriptBookmarks();
                 syncLocalScriptsIfLogged();
             }
             showToast(added ? ('已导入 ' + added + ' 个脚本') : ('没有新增脚本，跳过 ' + skipped + ' 个重复项'), added ? 'success' : 'info');
@@ -1511,7 +1515,7 @@ function syncScriptBookmarks(mode, silent) {
         return;
     }
     if (!silent) setCloudStatus('正在同步书签...', '');
-    var payload = { mode: mode, scripts: loadBM(SBK), updatedAt: getScriptUpdatedAt() };
+    var payload = { mode: mode, scripts: loadSortedScriptBookmarks(), updatedAt: getScriptUpdatedAt() };
     apiJSON('/api/scripts/sync', { method: 'POST', body: payload })
         .then(function (res) {
             var d = res.data || {};
@@ -1555,7 +1559,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.16');
+    var current = clean(data.currentVersion || data.current, '0.5.17');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
@@ -1748,6 +1752,44 @@ function scriptBookmarkKey(b) {
     return ((b && b.name ? b.name : '').trim()) + '\n' + ((b && b.cmd ? b.cmd : '').trim());
 }
 
+function parseScriptUseCount(b) {
+    if (!b) return 0;
+    var v = parseInt(b.useCount != null ? b.useCount : (b.usageCount != null ? b.usageCount : b.count), 10);
+    return isFinite(v) && v > 0 ? v : 0;
+}
+
+function parseScriptLastUsed(b) {
+    if (!b) return 0;
+    var raw = b.lastUsed != null ? b.lastUsed : (b.lastRunAt != null ? b.lastRunAt : b.usedAt);
+    var v = parseInt(raw, 10);
+    if (!(isFinite(v) && v > 0) && typeof raw === 'string') v = Date.parse(raw);
+    return isFinite(v) && v > 0 ? v : 0;
+}
+
+function sortScriptBookmarks(bms) {
+    if (!Array.isArray(bms) || bms.length < 2) return false;
+    var before = bms.map(function (b) { return scriptBookmarkKey(b) + '\u0000' + parseScriptUseCount(b) + '\u0000' + parseScriptLastUsed(b); }).join('\u0001');
+    bms.forEach(function (b, i) { if (b) b.__scriptSortIndex = i; });
+    bms.sort(function (a, b) {
+        var au = parseScriptUseCount(a), bu = parseScriptUseCount(b);
+        if (bu !== au) return bu - au;
+        var at = parseScriptLastUsed(a), bt = parseScriptLastUsed(b);
+        if (bt !== at) return bt - at;
+        return (a.__scriptSortIndex || 0) - (b.__scriptSortIndex || 0);
+    });
+    bms.forEach(function (b) { if (b) delete b.__scriptSortIndex; });
+    var after = bms.map(function (b) { return scriptBookmarkKey(b) + '\u0000' + parseScriptUseCount(b) + '\u0000' + parseScriptLastUsed(b); }).join('\u0001');
+    return before !== after;
+}
+
+function loadSortedScriptBookmarks() {
+    var bms = loadBM(SBK);
+    if (sortScriptBookmarks(bms)) {
+        localStorage.setItem(SBK, JSON.stringify(bms));
+    }
+    return bms;
+}
+
 function scriptBookmarkItemHtml(b, i) {
     var name = b.name || '';
     var cmd = b.cmd || '';
@@ -1820,7 +1862,7 @@ function removeScriptBookmarkRow(i) {
 
 function mergeScriptBookmarksIncremental(incoming, updatedAt) {
     incoming = normalizeCloudScripts(incoming);
-    var current = loadBM(SBK);
+    var current = loadSortedScriptBookmarks();
     var seen = {};
     current.forEach(function (b) { seen[scriptBookmarkKey(b)] = true; });
     var added = [];
@@ -1832,14 +1874,15 @@ function mergeScriptBookmarksIncremental(incoming, updatedAt) {
         seen[key] = true;
     });
     if (added.length || updatedAt) {
+        sortScriptBookmarks(current);
         saveScriptBookmarksData(current, updatedAt || Date.now());
     }
-    if (added.length) appendScriptBookmarkItems(added, current.length - added.length);
+    if (added.length) renderScriptBookmarks();
     return { scripts: current, added: added.length };
 }
 
 function renderScriptBookmarks() {
-    var l = document.getElementById('scriptBookmarkList'), bms = loadBM(SBK);
+    var l = document.getElementById('scriptBookmarkList'), bms = loadSortedScriptBookmarks();
     var html = '';
 
     // Preset entry
@@ -1883,7 +1926,7 @@ function saveScriptBookmark() {
 }
 
 function openEditScriptModal(i) {
-    var b = loadBM(SBK)[i];
+    var b = loadSortedScriptBookmarks()[i];
     if (!b) return;
     document.getElementById('editScriptIndex').value = i;
     document.getElementById('editScriptName').value = b.name || '';
@@ -1912,26 +1955,34 @@ function saveEditedScriptBookmark() {
     var cmd = document.getElementById('editScriptContent').value.trim();
     if (idx < 0 || !isFinite(idx)) { hideEditScriptModal(); return; }
     if (!name || !cmd) { showToast('名称和命令不能为空', 'error'); return; }
-    var bms = loadBM(SBK);
+    var bms = loadSortedScriptBookmarks();
     if (!bms[idx]) { hideEditScriptModal(); return; }
     bms[idx] = Object.assign({}, bms[idx], { name: name, cmd: cmd });
+    sortScriptBookmarks(bms);
     saveBM(SBK, bms);
     hideEditScriptModal();
-    replaceScriptBookmarkRow(idx, bms[idx]);
+    renderScriptBookmarks();
     syncLocalScriptsIfLogged();
     showToast('脚本已更新', 'success');
 }
 
 function runScript(i) {
-    var b = loadBM(SBK)[i]; if (!b) return;
+    var bms = loadSortedScriptBookmarks();
+    var b = bms[i]; if (!b) return;
     if (activeIdx < 0 || !sessions[activeIdx] || !sessions[activeIdx].ws || sessions[activeIdx].ws.readyState !== 1) { showToast('无活动连接', 'error'); return; }
     sessions[activeIdx].ws.send(b.cmd + '\n');
+    b.useCount = parseScriptUseCount(b) + 1;
+    b.lastUsed = Date.now();
+    sortScriptBookmarks(bms);
+    saveBM(SBK, bms);
+    renderScriptBookmarks();
+    syncLocalScriptsIfLogged();
     showToast('已执行: ' + b.name, 'success');
     sessions[activeIdx].term.focus();
 }
 
 function delScript(i) {
-    var bms = loadBM(SBK);
+    var bms = loadSortedScriptBookmarks();
     if (!bms[i]) return;
     bms.splice(i, 1);
     saveBM(SBK, bms);

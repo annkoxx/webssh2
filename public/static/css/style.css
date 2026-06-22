@@ -528,6 +528,7 @@ html[data-theme="light"] .server-table th{background:rgba(244,248,255,.94)}
 .server-expandable{cursor:zoom-in;position:relative}
 .server-expandable:hover .server-card-open{opacity:1;transform:translateY(0)}
 .server-card-open{position:absolute;right:10px;top:9px;z-index:3;padding:3px 7px;border:1px solid rgba(0,212,255,.2);border-radius:999px;background:rgba(0,212,255,.08);color:var(--c1);font-size:10px;font-weight:700;opacity:0;transform:translateY(-3px);transition:all .18s ease;pointer-events:none}
+.network-card .server-card-open{right:auto;left:58px;top:10px}
 .server-info-card.network-card{grid-column:span 12;min-height:292px;border-color:rgba(0,212,255,.18);background:linear-gradient(145deg,rgba(0,212,255,.08),rgba(123,47,247,.055) 42%,rgba(255,255,255,.045));overflow:hidden}
 html[data-theme="light"] .server-info-card.network-card{background:linear-gradient(145deg,rgba(255,255,255,.72),rgba(232,244,255,.66));border-color:rgba(0,136,204,.16)}
 .server-priority-card{grid-column:span 6}
@@ -584,8 +585,8 @@ html[data-theme="light"] .server-net-canvas line{stroke:rgba(0,0,0,.08)}
 .net-area{opacity:.26}
 .net-area.rx{fill:var(--c1)}
 .net-area.tx{fill:var(--c2)}
-.net-label{font-size:10px;font-weight:800;font-family:'JetBrains Mono','Fira Code',monospace;letter-spacing:-.03em;paint-order:stroke;stroke:rgba(10,10,26,.78);stroke-width:3.5px;stroke-linejoin:round;pointer-events:none}
-html[data-theme="light"] .net-label{stroke:rgba(255,255,255,.86)}
+.net-label{font-size:9px;font-weight:500;font-family:'JetBrains Mono','Fira Code',monospace;letter-spacing:-.02em;paint-order:stroke;stroke:rgba(10,10,26,.72);stroke-width:2.4px;stroke-linejoin:round;pointer-events:none;opacity:.92}
+html[data-theme="light"] .net-label{stroke:rgba(255,255,255,.88)}
 .net-label.rx{fill:var(--c1)}
 .net-label.tx{fill:var(--c2)}
 .server-net-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:12px;z-index:1;pointer-events:none}
