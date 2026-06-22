@@ -9,6 +9,7 @@ var sftpCurrentPath = '/';
 var serverInfoModalIdx = -1;
 var serverInfoTimer = null;
 var serverInfoSelectedIface = {};
+var serverInfoDetailType = null;
 var TOPBAR_METRICS_KEY = 'webssh_topbar_metrics';
 var FIRST_SSH_SUCCESS_KEY = 'webssh_first_ssh_success_seen';
 var NET_UNIT_KEY = 'webssh_server_net_unit';
@@ -106,6 +107,8 @@ document.getElementById('loginForm').addEventListener('submit', function (e) {
 
 document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') {
+        var serverInfoDetailModal = document.getElementById('serverInfoDetailModal');
+        if (serverInfoDetailModal && serverInfoDetailModal.classList.contains('show')) { hideServerInfoDetailModal(); return; }
         var authModal = document.getElementById('authModal');
         if (authModal && authModal.classList.contains('show')) { hideAuthModal(); return; }
         var editScriptModal = document.getElementById('editScriptModal');
@@ -122,9 +125,9 @@ document.addEventListener('keydown', function (e) {
 });
 
 document.addEventListener('click', function (e) {
-    var serverInfoModal = document.getElementById('serverInfoModal');
-    if (serverInfoModal && serverInfoModal.classList.contains('show') && e.target === serverInfoModal) {
-        hideServerInfoModal();
+    var serverInfoDetailModal = document.getElementById('serverInfoDetailModal');
+    if (serverInfoDetailModal && serverInfoDetailModal.classList.contains('show') && e.target === serverInfoDetailModal) {
+        hideServerInfoDetailModal();
     }
 });
 
@@ -627,8 +630,8 @@ function buildNetArea(path, items, width, height, pad) {
 }
 
 function networkChartHtml(session, ifaceName) {
-    var history = getNetworkHistory(session, ifaceName).slice(-48);
-    var width = 640, height = 176, pad = 22;
+    var history = getNetworkHistory(session, ifaceName).slice(-120);
+    var width = 720, height = 210, pad = 22;
     var max = 1;
     history.forEach(function (p) {
         max = Math.max(max, parseFloat(p.rx) || 0, parseFloat(p.tx) || 0);
@@ -638,11 +641,20 @@ function networkChartHtml(session, ifaceName) {
     var rxArea = buildNetArea(rxPath, history, width, height, pad);
     var txArea = buildNetArea(txPath, history, width, height, pad);
     var empty = history.length < 2 ? '<div class="server-net-empty">等待下一次刷新后生成实时曲线</div>' : '';
+    var grid = '';
+    for (var gi = 0; gi <= 4; gi++) {
+        var y = pad + gi * ((height - pad * 2) / 4);
+        grid += '<line class="net-grid-h" x1="' + pad + '" y1="' + y.toFixed(1) + '" x2="' + (width - pad) + '" y2="' + y.toFixed(1) + '"/>';
+    }
+    for (var gx = 0; gx <= 6; gx++) {
+        var x = pad + gx * ((width - pad * 2) / 6);
+        grid += '<line class="net-grid-v" x1="' + x.toFixed(1) + '" y1="' + pad + '" x2="' + x.toFixed(1) + '" y2="' + (height - pad) + '"/>';
+    }
     return '<div class="server-net-chart">' +
-        '<div class="server-net-chart-head"><div><b>实时网络曲线</b><span>当前单位：' + (serverInfoNetUnit === 'bits' ? 'Mbps' : 'MB/s') + '</span></div><div class="server-net-legend"><span class="rx">接收</span><span class="tx">发送</span></div></div>' +
+        '<div class="server-net-chart-head"><div><b>实时网络曲线</b><span>最近 ' + Math.max(0, history.length - 1) + ' 秒 · 当前单位：' + (serverInfoNetUnit === 'bits' ? 'Mbps' : 'MB/s') + '</span></div><div class="server-net-legend"><span class="rx">接收</span><span class="tx">发送</span></div></div>' +
         '<div class="server-net-canvas">' + empty +
         '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" aria-hidden="true">' +
-        '<line x1="' + pad + '" y1="' + pad + '" x2="' + (width - pad) + '" y2="' + pad + '"/><line x1="' + pad + '" y1="' + (height / 2) + '" x2="' + (width - pad) + '" y2="' + (height / 2) + '"/><line x1="' + pad + '" y1="' + (height - pad) + '" x2="' + (width - pad) + '" y2="' + (height - pad) + '"/>' +
+        grid +
         (rxArea ? '<path class="net-area rx" d="' + rxArea + '"/>' : '') +
         (txArea ? '<path class="net-area tx" d="' + txArea + '"/>' : '') +
         (rxPath ? '<path class="net-line rx" d="' + rxPath + '"/>' : '') +
@@ -708,6 +720,7 @@ function openServerInfoModal(idx) {
 function hideServerInfoModal() {
     serverInfoModalIdx = -1;
     stopServerInfoTimer();
+    hideServerInfoDetailModal();
     var modal = document.getElementById('serverInfoModal');
     if (modal) modal.classList.remove('show');
 }
@@ -752,6 +765,73 @@ function renderServerInfoError(message) {
     body.innerHTML = '<div class="server-info-error"><b>读取失败</b><span>' + esc(message || '服务器信息暂时不可用') + '</span></div>';
 }
 
+function hideServerInfoDetailModal() {
+    serverInfoDetailType = null;
+    var modal = document.getElementById('serverInfoDetailModal');
+    if (modal) modal.classList.remove('show');
+}
+
+function openServerInfoDetailModal(type) {
+    var s = sessions[serverInfoModalIdx];
+    if (!s || !s._lastMetrics) return;
+    serverInfoDetailType = type;
+    renderServerInfoDetail(type, s._lastMetrics, s);
+    var modal = document.getElementById('serverInfoDetailModal');
+    if (modal) modal.classList.add('show');
+}
+
+function renderServerInfoDetail(type, d, session) {
+    var modal = document.getElementById('serverInfoDetailModal');
+    var body = document.getElementById('serverInfoDetailBody');
+    var title = document.getElementById('serverInfoDetailTitle');
+    if (!body || !title || (modal && !modal.classList.contains('show') && serverInfoDetailType !== type)) return;
+    var ifaces = Array.isArray(d.interfaces) ? d.interfaces : [];
+    var selectedIface = getSelectedInterface(d);
+    var ifaceName = selectedIface ? selectedIface.name : (d.mainIface || '-');
+    var rxRate = selectedIface ? selectedIface.rxRate : d.rxRate;
+    var txRate = selectedIface ? selectedIface.txRate : d.txRate;
+    var rxTotal = selectedIface ? selectedIface.rxTotal : d.rxTotal;
+    var txTotal = selectedIface ? selectedIface.txTotal : d.txTotal;
+    var cpu = parseFloat(d.cpuUsage) || 0;
+    var diskPct = percentOf(d.diskUsed, d.diskTotal);
+    var memPct = percentOf(d.memUsed, d.memTotal);
+    var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
+    var cb = d.cpuBreakdown || {};
+    var procRows = (Array.isArray(d.processes) ? d.processes : []).map(function (p) {
+        return '<tr><td>' + esc(p.pid) + '</td><td>' + esc(p.user) + '</td><td>' + esc(fmtKb(p.rss)) + '</td><td>' + esc(fmtPct(p.cpu)) + '</td><td title="' + esc(p.cmd || p.name) + '">' + esc(p.cmd || p.name || '-') + '</td></tr>';
+    }).join('') || '<tr><td colspan="5">暂无进程数据</td></tr>';
+    var fsRows = (Array.isArray(d.filesystems) ? d.filesystems : []).map(function (fs) {
+        return '<tr><td title="' + esc(fs.name) + '">' + esc(fs.mount || fs.name) + '</td><td>' + esc(fmtB(fs.used)) + ' / ' + esc(fmtB(fs.size)) + '</td><td>' + esc(fmtB(fs.avail)) + '</td><td>' + esc(fs.pct || '-') + '</td></tr>';
+    }).join('') || '<tr><td colspan="4">暂无文件系统数据</td></tr>';
+    var titles = { network: '网络详情', processes: '进程详情', filesystems: '文件系统详情', facts: '基础信息', summary: '资源概览' };
+    title.textContent = titles[type] || '服务器详情';
+    if (type === 'network') {
+        body.innerHTML = '<div class="server-detail-section">' +
+            '<div class="server-detail-kv"><div><span>当前网卡</span><b>' + esc(ifaceName) + '</b></div><div><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div><div><span>网卡数量</span><b>' + esc(ifaces.length || 1) + '</b></div></div>' +
+            networkChartHtml(session, ifaceName) + '</div>';
+    } else if (type === 'processes') {
+        body.innerHTML = '<div class="server-table-wrap detail-table"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>完整命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div>';
+    } else if (type === 'filesystems') {
+        body.innerHTML = '<div class="server-table-wrap detail-table"><table class="server-table"><thead><tr><th>挂载点</th><th>已用 / 大小</th><th>可用</th><th>使用率</th></tr></thead><tbody>' + fsRows + '</tbody></table></div>';
+    } else if (type === 'facts') {
+        body.innerHTML = '<div class="server-info-facts detail-facts">' +
+            '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>内核版本</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
+            '<div><span>主机名</span><b>' + esc(d.hostname || '-') + '</b></div><div><span>架构</span><b>' + esc(d.arch || '-') + '</b></div>' +
+            '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div><div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
+            '<div><span>CPU 型号</span><b>' + esc(d.cpuModel || '-') + '</b></div><div><span>CPU 核心</span><b>' + esc(d.cpuCores || '-') + '</b></div>' +
+            '</div>';
+    } else {
+        body.innerHTML = '<div class="server-summary-grid detail-summary">' +
+            '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</small></div>' +
+            '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '，可用 ' + fmtB(d.memAvailable || d.memFree) + '</small></div>' +
+            '<div><span>Swap</span><b>' + percentOf(d.swapUsed, d.swapTotal) + '%</b><small>' + fmtB(d.swapUsed) + ' / ' + fmtB(d.swapTotal) + '</small></div>' +
+            '<div><span>磁盘</span><b>' + diskPct + '%</b><small>' + fmtB(d.diskUsed) + ' / ' + fmtB(d.diskTotal) + '，剩余 ' + fmtB(d.diskFree) + '</small></div>' +
+            '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small></div>' +
+            '<div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b><small>运行 ' + esc(fmtUptimeLong(d.uptime)) + '</small></div>' +
+            '</div>';
+    }
+}
+
 function renderServerInfo(d, session) {
     var body = document.getElementById('serverInfoBody');
     if (!body) return;
@@ -783,29 +863,30 @@ function renderServerInfo(d, session) {
     var txTotal = selectedIface ? selectedIface.txTotal : d.txTotal;
     var memPct = percentOf(d.memUsed, d.memTotal);
     var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
-    var netUnitToggle = '<div class="server-net-unit-toggle"><button type="button" class="' + (serverInfoNetUnit === 'bytes' ? 'active' : '') + '" onclick="changeServerNetUnit(\'bytes\')">MB/s</button><button type="button" class="' + (serverInfoNetUnit === 'bits' ? 'active' : '') + '" onclick="changeServerNetUnit(\'bits\')">Mbps</button></div>';
+    var netUnitToggle = '<div class="server-net-unit-toggle"><button type="button" class="' + (serverInfoNetUnit === 'bytes' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bytes\')">MB/s</button><button type="button" class="' + (serverInfoNetUnit === 'bits' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bits\')">Mbps</button></div>';
     body.innerHTML =
         '<div class="server-info-hero">' +
         '<div><div class="server-info-kicker">当前连接</div><h3 class="server-info-host-copy" onclick="copyIP(sessions[serverInfoModalIdx].hostname)" title="点击复制 IP">' + esc(session.hostname) + '</h3><p>' + esc(d.hostname || '-') + ' · ' + esc(d.os || '-') + '</p></div>' +
         '<div class="server-info-live"><span></span>每 ' + getServerInfoRefreshSeconds() + ' 秒刷新</div>' +
         '</div>' +
         '<div class="server-info-grid">' +
-        '<div class="server-info-card wide network-card"><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
-        '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName) + '</div>' +
-        '<div class="server-info-card wide server-priority-card"><h4>进程</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div></div>' +
-        '<div class="server-info-card wide server-priority-card"><h4>文件系统</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>挂载点</th><th>已用/大小</th><th>使用率</th></tr></thead><tbody>' + fsRows + '</tbody></table></div></div>' +
-        '<div class="server-info-card wide server-summary-card"><h4>资源概览</h4><div class="server-summary-grid">' +
+        '<div class="server-info-card wide server-summary-card server-expandable" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><div class="server-card-open">放大</div><h4>资源概览</h4><div class="server-summary-grid">' +
         '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>' + esc(d.cpuCores || '?') + ' 核</small></div>' +
         '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '</small></div>' +
         '<div><span>磁盘</span><b>' + diskPct + '%</b><small>剩余 ' + fmtB(d.diskFree) + '</small></div>' +
         '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small></div>' +
         '</div><div class="server-info-mini">CPU：用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div></div>' +
-        '<div class="server-info-card wide server-facts-card"><h4>基础信息</h4><div class="server-info-facts">' +
+        '<div class="server-info-card wide server-facts-card server-expandable" onclick="openServerInfoDetailModal(\'facts\')" title="点击放大查看基础信息"><div class="server-card-open">放大</div><h4>基础信息</h4><div class="server-info-facts">' +
         '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
         '<div><span>主机名</span><b>' + esc(d.hostname || '-') + '</b></div><div><span>架构</span><b>' + esc(d.arch || '-') + '</b></div>' +
         '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div><div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
         '</div></div>' +
+        '<div class="server-info-card wide network-card server-expandable" onclick="openServerInfoDetailModal(\'network\')" title="点击放大查看网络"><div class="server-card-open">放大</div><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onclick="event.stopPropagation()" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
+        '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName) + '</div>' +
+        '<div class="server-info-card wide server-priority-card server-expandable" onclick="openServerInfoDetailModal(\'processes\')" title="点击放大查看进程"><div class="server-card-open">放大</div><h4>进程</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div></div>' +
+        '<div class="server-info-card wide server-priority-card server-expandable" onclick="openServerInfoDetailModal(\'filesystems\')" title="点击放大查看文件系统"><div class="server-card-open">放大</div><h4>文件系统</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>挂载点</th><th>已用/大小</th><th>使用率</th></tr></thead><tbody>' + fsRows + '</tbody></table></div></div>' +
         '</div>';
+    if (serverInfoDetailType) renderServerInfoDetail(serverInfoDetailType, d, session);
 }
 
 // ==================== Drawers ====================
@@ -1370,7 +1451,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.12');
+    var current = clean(data.currentVersion || data.current, '0.5.13');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
