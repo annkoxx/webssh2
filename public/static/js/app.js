@@ -622,9 +622,13 @@ function buildNetPath(items, key, max, width, height, pad, domainStart, domainEn
     if (!items.length) return '';
     return items.map(function (item, idx) {
         var x = netPointX(item, idx, items, width, pad, domainStart, domainEnd);
-        var y = height - pad - ((parseFloat(item[key]) || 0) / max) * (height - pad * 2);
+        var y = netPointY(item, key, max, height, pad);
         return (idx ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
     }).join(' ');
+}
+
+function netPointY(item, key, max, height, pad) {
+    return height - pad - ((parseFloat(item[key]) || 0) / max) * (height - pad * 2);
 }
 
 function buildNetArea(path, items, width, height, pad, domainStart, domainEnd) {
@@ -632,6 +636,43 @@ function buildNetArea(path, items, width, height, pad, domainStart, domainEnd) {
     var firstX = netPointX(items[0], 0, items, width, pad, domainStart, domainEnd);
     var lastX = netPointX(items[items.length - 1], items.length - 1, items, width, pad, domainStart, domainEnd);
     return path + ' L' + lastX + ' ' + (height - pad) + ' L' + firstX + ' ' + (height - pad) + ' Z';
+}
+
+function buildNetLabels(items, key, max, width, height, pad, domainStart, domainEnd, cls) {
+    if (!items.length) return '';
+    var labelLimit = Math.max(8, Math.floor((width - pad * 2) / 54));
+    var step = Math.max(1, Math.ceil(items.length / labelLimit));
+    var seen = {};
+    var picked = [];
+    function pick(idx) {
+        if (idx < 0 || idx >= items.length || seen[idx]) return;
+        seen[idx] = true;
+        picked.push(idx);
+    }
+    for (var i = 0; i < items.length; i += step) pick(i);
+    pick(items.length - 1);
+    if (step > 1) {
+        for (var j = 1; j < items.length - 1; j++) {
+            var prev = parseFloat(items[j - 1][key]) || 0;
+            var cur = parseFloat(items[j][key]) || 0;
+            var next = parseFloat(items[j + 1][key]) || 0;
+            if ((cur >= prev && cur > next) || (cur > prev && cur >= next) || (cur <= prev && cur < next) || (cur < prev && cur <= next)) pick(j);
+        }
+    }
+    picked.sort(function (a, b) { return a - b; });
+    var lastX = -Infinity;
+    var minGap = items.length <= labelLimit ? 0 : 42;
+    return picked.map(function (idx) {
+        var item = items[idx];
+        var value = parseFloat(item[key]) || 0;
+        var x = netPointX(item, idx, items, width, pad, domainStart, domainEnd);
+        if (x - lastX < minGap && idx !== items.length - 1) return '';
+        lastX = x;
+        var y = netPointY(item, key, max, height, pad) - 9;
+        y = Math.max(12, Math.min(height - pad - 12, y));
+        var anchor = x < pad + 34 ? 'start' : (x > width - pad - 34 ? 'end' : 'middle');
+        return '<text class="net-label ' + cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="' + anchor + '">' + esc(fmtNetRate(value)) + '</text>';
+    }).join('');
 }
 
 function formatBeijingMinute(ts) {
@@ -698,6 +739,8 @@ function networkChartHtml(session, ifaceName) {
     var txPath = buildNetPath(history, 'tx', max, width, height, pad, domain.start, domain.end);
     var rxArea = buildNetArea(rxPath, history, width, height, pad, domain.start, domain.end);
     var txArea = buildNetArea(txPath, history, width, height, pad, domain.start, domain.end);
+    var rxLabels = buildNetLabels(history, 'rx', max, width, height, pad, domain.start, domain.end, 'rx');
+    var txLabels = buildNetLabels(history, 'tx', max, width, height, pad, domain.start, domain.end, 'tx');
     var empty = history.length < 2 ? '<div class="server-net-empty">等待下一次刷新后生成实时曲线</div>' : '';
     var grid = '';
     for (var gi = 0; gi <= 4; gi++) {
@@ -718,6 +761,8 @@ function networkChartHtml(session, ifaceName) {
         (txArea ? '<path class="net-area tx" d="' + txArea + '"/>' : '') +
         (rxPath ? '<path class="net-line rx" d="' + rxPath + '"/>' : '') +
         (txPath ? '<path class="net-line tx" d="' + txPath + '"/>' : '') +
+        rxLabels +
+        txLabels +
         '</svg></div>' +
         '<div class="server-net-axis">' + networkTimeAxisHtml(domain) + '</div>' +
         '</div>';
@@ -1510,7 +1555,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.15');
+    var current = clean(data.currentVersion || data.current, '0.5.16');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
