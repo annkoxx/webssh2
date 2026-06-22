@@ -1041,18 +1041,33 @@ func startUpdateHelper(ctx context.Context, force bool) (gin.H, error) {
 	if force {
 		composeCmd += " --force-recreate"
 	}
+	gitUpdateCmd := strings.Join([]string{
+		"log \"pull origin/$BRANCH (fast-forward only)\"",
+		"if ! git pull --ff-only origin \"$BRANCH\"; then",
+		"  log 'fast-forward update failed: local source has diverged. Enable force update to reset tracked source files to the remote version.'",
+		"  exit 20",
+		"fi",
+	}, "\n")
+	if force {
+		gitUpdateCmd = strings.Join([]string{
+			"log \"force update: reset tracked source files to $REMOTE_REF\"",
+			"git rev-parse --verify \"$REMOTE_REF\" >/dev/null",
+			"git reset --hard \"$REMOTE_REF\"",
+		}, "\n")
+	}
 	script := strings.Join([]string{
 		"set -eu",
 		"log(){ printf '%s %s\\n' \"$(date '+%F %T')\" \"$*\"; }",
+		"BRANCH=" + shellQuote(branch),
+		"REMOTE_REF=\"refs/remotes/origin/$BRANCH\"",
 		"cd " + shellQuote(hostDir),
 		"log 'WebSSH update started'",
 		"git config --global --add safe.directory " + shellQuote(hostDir) + " >/dev/null 2>&1 || true",
 		"log 'checking git repository'",
 		"git status --short || true",
 		"log 'fetch origin'",
-		"git fetch --prune origin",
-		"log 'pull origin/" + branch + "'",
-		"git pull --ff-only origin " + shellQuote(branch),
+		"git fetch --prune origin \"$BRANCH\"",
+		gitUpdateCmd,
 		"log \"source is now $(git rev-parse --short HEAD)\"",
 		"log 'docker compose version'",
 		"docker compose version",
