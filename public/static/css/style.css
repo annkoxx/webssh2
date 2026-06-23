@@ -595,10 +595,8 @@ html[data-theme="light"] .server-net-canvas line{stroke:rgba(0,0,0,.08)}
 .net-label-bg.rx{stroke:rgba(0,212,255,.26)}
 .net-label-bg.tx{stroke:rgba(123,47,247,.3)}
 html[data-theme="light"] .net-label-bg{fill:rgba(255,255,255,.86)}
-.net-label{font-size:9px;font-weight:400;font-family:'JetBrains Mono','Fira Code',monospace;letter-spacing:-.02em;paint-order:stroke;stroke:rgba(7,12,30,.42);stroke-width:1px;stroke-linejoin:round;pointer-events:none;opacity:.96}
-html[data-theme="light"] .net-label{stroke:rgba(255,255,255,.72)}
-.net-label.rx{fill:var(--c1)}
-.net-label.tx{fill:var(--c2)}
+.net-label{font-size:11.7px;font-weight:800;font-family:SimHei,'Microsoft YaHei','PingFang SC','Hiragino Sans GB','Noto Sans SC',Arial,sans-serif;letter-spacing:-.01em;paint-order:stroke;stroke:rgba(7,12,30,.58);stroke-width:1.1px;stroke-linejoin:round;pointer-events:none;opacity:1;fill:#fff}
+html[data-theme="light"] .net-label{fill:#111827;stroke:rgba(255,255,255,.86)}
 .server-net-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:12px;z-index:1;pointer-events:none}
 .server-net-axis{position:relative;height:22px;margin-top:8px;color:var(--t3);font-size:10px;font-family:'JetBrains Mono','Fira Code',monospace}
 .server-net-axis .time-tick{position:absolute;top:0;transform:translateX(-50%);white-space:nowrap}

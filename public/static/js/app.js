@@ -793,7 +793,7 @@ function buildNetArea(path, items, width, height, pad, domainStart, domainEnd) {
 
 function buildNetLabels(items, key, max, width, height, pad, domainStart, domainEnd, cls) {
     if (!items.length) return '';
-    var labelLimit = Math.max(8, Math.floor((width - pad * 2) / 54));
+    var labelLimit = Math.max(7, Math.floor((width - pad * 2) / 70));
     var step = Math.max(1, Math.ceil(items.length / labelLimit));
     var seen = {};
     var picked = [];
@@ -814,7 +814,7 @@ function buildNetLabels(items, key, max, width, height, pad, domainStart, domain
     }
     picked.sort(function (a, b) { return a - b; });
     var lastX = -Infinity;
-    var minGap = items.length <= labelLimit ? 0 : 42;
+    var minGap = items.length <= labelLimit ? 0 : 55;
     return picked.map(function (idx) {
         var item = items[idx];
         var value = parseFloat(item[key]) || 0;
@@ -822,16 +822,16 @@ function buildNetLabels(items, key, max, width, height, pad, domainStart, domain
         if (x - lastX < minGap && idx !== items.length - 1) return '';
         lastX = x;
         var label = fmtNetRate(value);
-        var y = netPointY(item, key, max, height, pad) + (cls === 'rx' ? 13 : -11);
-        y = Math.max(13, Math.min(height - pad - 8, y));
-        var anchor = x < pad + 34 ? 'start' : (x > width - pad - 34 ? 'end' : 'middle');
-        var labelWidth = Math.max(24, label.length * 5.3 + 8);
-        var rectX = anchor === 'start' ? x - 3 : (anchor === 'end' ? x - labelWidth + 3 : x - labelWidth / 2);
-        var rectY = y - 10;
+        var y = netPointY(item, key, max, height, pad) + (cls === 'rx' ? 17 : -14);
+        y = Math.max(17, Math.min(height - pad - 10, y));
+        var anchor = x < pad + 44 ? 'start' : (x > width - pad - 44 ? 'end' : 'middle');
+        var labelWidth = Math.max(32, label.length * 7 + 12);
+        var rectX = anchor === 'start' ? x - 4 : (anchor === 'end' ? x - labelWidth + 4 : x - labelWidth / 2);
+        var rectY = y - 12;
         rectX = Math.max(2, Math.min(width - labelWidth - 2, rectX));
-        rectY = Math.max(2, Math.min(height - 14, rectY));
+        rectY = Math.max(2, Math.min(height - 18, rectY));
         return '<g class="net-label-wrap ' + cls + '">' +
-            '<rect class="net-label-bg ' + cls + '" x="' + rectX.toFixed(1) + '" y="' + rectY.toFixed(1) + '" width="' + labelWidth.toFixed(1) + '" height="12" rx="4"/>' +
+            '<rect class="net-label-bg ' + cls + '" x="' + rectX.toFixed(1) + '" y="' + rectY.toFixed(1) + '" width="' + labelWidth.toFixed(1) + '" height="16" rx="5"/>' +
             '<text class="net-label ' + cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="' + anchor + '">' + esc(label) + '</text>' +
             '</g>';
     }).join('');
@@ -1721,7 +1721,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.19');
+    var current = clean(data.currentVersion || data.current, '0.5.20');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
