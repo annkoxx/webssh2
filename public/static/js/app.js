@@ -661,6 +661,7 @@ function fetchSysInfoFor(session) {
             if (d.Msg === 'success' && d.Data) {
                 session._lastMetrics = d.Data;
                 recordNetworkSample(session, d.Data);
+                recordResourceSample(session, d.Data);
                 if (sessions[activeIdx] === session && isTopbarMetricsEnabled()) renderMetrics(d.Data);
                 if (serverInfoModalIdx >= 0 && sessions[serverInfoModalIdx] === session) renderServerInfo(d.Data, session);
             } else if (serverInfoModalIdx >= 0 && sessions[serverInfoModalIdx] === session) {
@@ -757,6 +758,51 @@ function recordNetworkSample(session, d) {
     } else {
         push(d.mainIface || '__main__', d.rxRate, d.txRate);
     }
+}
+
+function recordResourceSample(session, d) {
+    if (!session || !d) return;
+    var now = Date.now();
+    var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
+    if (!session._resourceHistory) session._resourceHistory = [];
+    session._resourceHistory.push({
+        t: now,
+        cpu: Math.max(0, parseFloat(d.cpuUsage) || 0),
+        mem: percentOf(d.memUsed, d.memTotal),
+        disk: percentOf(d.diskUsed, d.diskTotal),
+        conn: Math.max(0, connTotal)
+    });
+    if (session._resourceHistory.length > 600) session._resourceHistory.shift();
+}
+
+function getResourceHistory(session) {
+    return session && Array.isArray(session._resourceHistory) ? session._resourceHistory : [];
+}
+
+function resourceSparklineHtml(session, key, fixedMax, cls) {
+    var history = getResourceHistory(session).slice(-180);
+    if (!history.length) return '<div class="server-summary-sparkline empty"></div>';
+    var width = 160, height = 42, pad = 4;
+    var max = parseFloat(fixedMax) || 0;
+    if (!max) {
+        history.forEach(function (p) { max = Math.max(max, parseFloat(p[key]) || 0); });
+        max = Math.max(1, max);
+    }
+    var span = Math.max(1, history.length - 1);
+    var path = history.map(function (p, idx) {
+        var value = Math.max(0, parseFloat(p[key]) || 0);
+        var x = pad + (idx / span) * (width - pad * 2);
+        var y = height - pad - Math.min(1, value / max) * (height - pad * 2);
+        return (idx ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+    }).join(' ');
+    var firstX = pad;
+    var lastX = pad + (history.length > 1 ? width - pad * 2 : 0);
+    var area = path + ' L' + lastX.toFixed(1) + ' ' + (height - pad) + ' L' + firstX.toFixed(1) + ' ' + (height - pad) + ' Z';
+    return '<div class="server-summary-sparkline ' + esc(cls || key) + '">' +
+        '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" aria-hidden="true">' +
+        '<path class="summary-spark-area" d="' + area + '"/>' +
+        '<path class="summary-spark-line" d="' + path + '"/>' +
+        '</svg></div>';
 }
 
 function getNetworkHistory(session, ifaceName) {
@@ -1081,11 +1127,11 @@ function renderServerInfoDetail(type, d, session) {
             '</div>';
     } else {
         body.innerHTML = '<div class="server-summary-grid detail-summary">' +
-            '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</small></div>' +
-            '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '，可用 ' + fmtB(d.memAvailable || d.memFree) + '</small></div>' +
+            '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
+            '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '，可用 ' + fmtB(d.memAvailable || d.memFree) + '</small>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
             '<div><span>Swap</span><b>' + percentOf(d.swapUsed, d.swapTotal) + '%</b><small>' + fmtB(d.swapUsed) + ' / ' + fmtB(d.swapTotal) + '</small></div>' +
-            '<div><span>磁盘</span><b>' + diskPct + '%</b><small>' + fmtB(d.diskUsed) + ' / ' + fmtB(d.diskTotal) + '，剩余 ' + fmtB(d.diskFree) + '</small></div>' +
-            '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small></div>' +
+            '<div><span>磁盘</span><b>' + diskPct + '%</b><small>' + fmtB(d.diskUsed) + ' / ' + fmtB(d.diskTotal) + '，剩余 ' + fmtB(d.diskFree) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
+            '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
             '<div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b><small>运行 ' + esc(fmtUptimeLong(d.uptime)) + '</small></div>' +
             '</div>';
     }
@@ -1130,10 +1176,10 @@ function renderServerInfo(d, session) {
         '</div>' +
         '<div class="server-info-grid">' +
         '<div class="server-info-card wide server-summary-card server-expandable" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><div class="server-card-open">放大</div><h4>资源概览</h4><div class="server-summary-grid">' +
-        '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>' + esc(d.cpuCores || '?') + ' 核</small></div>' +
-        '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '</small></div>' +
-        '<div><span>磁盘</span><b>' + diskPct + '%</b><small>剩余 ' + fmtB(d.diskFree) + '</small></div>' +
-        '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small></div>' +
+        '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>' + esc(d.cpuCores || '?') + ' 核</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
+        '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '</small>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
+        '<div><span>磁盘</span><b>' + diskPct + '%</b><small>剩余 ' + fmtB(d.diskFree) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
+        '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
         '</div><div class="server-info-mini">CPU：用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div></div>' +
         '<div class="server-info-card wide server-facts-card server-expandable" onclick="openServerInfoDetailModal(\'facts\')" title="点击放大查看基础信息"><div class="server-card-open">放大</div><h4>基础信息</h4><div class="server-info-facts">' +
         '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
@@ -1714,7 +1760,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.22');
+    var current = clean(data.currentVersion || data.current, '0.5.23');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;

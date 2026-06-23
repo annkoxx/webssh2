@@ -744,10 +744,16 @@ html[data-theme="light"]{--server-panel-text:#111827;--server-panel-muted:#11182
 .server-table th{font-family:inherit;color:var(--server-panel-text)}
 .server-table tr:hover td{color:var(--server-panel-text)}
 .server-summary-card .server-summary-grid,.server-summary-grid.detail-summary{grid-template-columns:1fr}
-.server-summary-grid div{display:grid;grid-template-columns:minmax(58px,.4fr) minmax(0,1fr);grid-template-areas:"label value" "detail detail";align-items:center;column-gap:10px;row-gap:3px}
+.server-summary-grid div{display:grid;grid-template-columns:minmax(58px,.4fr) minmax(0,1fr);grid-template-areas:"label value" "detail detail" "chart chart";align-items:center;column-gap:10px;row-gap:3px}
 .server-summary-grid span{grid-area:label;margin:0;font-size:11px}
 .server-summary-grid b{grid-area:value;justify-self:start;white-space:normal;overflow:visible;text-overflow:clip;font-family:inherit;font-size:17px;line-height:1.2}
 .server-summary-grid small{grid-area:detail;margin-top:2px;white-space:normal;overflow:visible;text-overflow:clip;font-size:11px;line-height:1.35}
+.server-summary-sparkline{grid-area:chart;height:42px;margin-top:8px;border:1px solid rgba(255,255,255,.1);border-radius:9px;background:rgba(0,0,0,.12);overflow:hidden}
+html[data-theme="light"] .server-summary-sparkline{border-color:rgba(0,0,0,.08);background:rgba(255,255,255,.42)}
+.server-summary-sparkline.empty{display:none}
+.server-summary-sparkline svg{display:block;width:100%;height:100%}
+.summary-spark-line{fill:none;stroke:var(--server-panel-text);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+.summary-spark-area{fill:var(--server-panel-text);opacity:.12}
 .server-summary-grid div:nth-child(n) b,.server-net-pair div:nth-child(n) b,.server-detail-kv div:nth-child(n) b{color:var(--server-panel-text)}
 .net-label,.net-label.rx,.net-label.tx{fill:var(--server-panel-text);font-family:'Microsoft YaHei','微软雅黑','PingFang SC','Hiragino Sans GB','Noto Sans SC',Arial,sans-serif}
 .server-net-peak.rx,.server-net-peak.tx,.server-info-kicker,.server-card-open,.server-iface-select,.server-iface-chip,.server-net-unit-toggle button,.server-net-unit-toggle button.active{color:var(--server-panel-text)}
