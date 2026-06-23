@@ -13,6 +13,9 @@ var serverInfoDetailType = null;
 var TOPBAR_METRICS_KEY = 'webssh_topbar_metrics';
 var FIRST_SSH_SUCCESS_KEY = 'webssh_first_ssh_success_seen';
 var NET_UNIT_KEY = 'webssh_server_net_unit';
+var SERVER_INFO_REFRESH_MS = 500;
+var SERVER_INFO_CHART_MINUTES = 3;
+var SERVER_INFO_DETAIL_CHART_MINUTES = 10;
 var serverInfoNetUnit = (function () {
     try { return localStorage.getItem(NET_UNIT_KEY) === 'bits' ? 'bits' : 'bytes'; } catch (e) { return 'bytes'; }
 })();
@@ -304,7 +307,7 @@ function renderTabs() {
     bar.innerHTML = sessions.map(function (s, i) {
         var cls = i === activeIdx ? 'ssh-tab active' : 'ssh-tab';
         return '<div class="' + cls + '" onclick="switchTab(' + i + ',true)">' +
-            '<span class="tab-ip" onclick="event.stopPropagation();switchTab(' + i + ',true);copyIP(sessions[' + i + '].hostname)" title="点击复制 IP">' + esc(s.hostname) + '</span>' +
+            '<span class="tab-ip" ondblclick="event.stopPropagation();copyIP(sessions[' + i + '].hostname)" title="单击切换标签，双击复制 IP">' + esc(s.hostname) + '</span>' +
             '<button class="tab-info" onclick="event.stopPropagation();openServerInfoModal(' + i + ')" title="服务器详情">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="10" x2="12" y2="16"/><circle cx="12" cy="7" r="1"/></svg></button>' +
             '<button class="tab-close" onclick="event.stopPropagation();closeTab(' + i + ')">' +
@@ -747,7 +750,7 @@ function recordNetworkSample(session, d) {
         name = name || '__main__';
         if (!session._netHistory[name]) session._netHistory[name] = [];
         session._netHistory[name].push({ t: now, rx: Math.max(0, parseFloat(rx) || 0), tx: Math.max(0, parseFloat(tx) || 0) });
-        if (session._netHistory[name].length > 600) session._netHistory[name].shift();
+        if (session._netHistory[name].length > 1800) session._netHistory[name].shift();
     }
     if (ifaces.length) {
         ifaces.forEach(function (n) { push(n.name, n.rxRate, n.txRate); });
@@ -851,11 +854,9 @@ function formatBeijingMinute(ts) {
     }
 }
 
-function networkDomain(history) {
+function networkDomain(history, minutes) {
     var end = history.length && history[history.length - 1].t ? history[history.length - 1].t : Date.now();
-    var first = history.length && history[0].t ? history[0].t : end;
-    var rawSpan = Math.max(0, end - first);
-    var span = Math.max(60 * 1000, Math.min(6 * 60 * 1000, rawSpan || 60 * 1000));
+    var span = Math.max(30 * 1000, (parseFloat(minutes) || SERVER_INFO_CHART_MINUTES) * 60 * 1000);
     return { start: end - span, end: end, span: span };
 }
 
@@ -883,9 +884,9 @@ function networkTimeAxisHtml(domain) {
     }).join('');
 }
 
-function networkChartHtml(session, ifaceName) {
-    var history = getNetworkHistory(session, ifaceName).slice(-360);
-    var domain = networkDomain(history);
+function networkChartHtml(session, ifaceName, minutes) {
+    var history = getNetworkHistory(session, ifaceName).slice(-1800);
+    var domain = networkDomain(history, minutes || SERVER_INFO_CHART_MINUTES);
     history = history.filter(function (p) { return !p.t || (p.t >= domain.start && p.t <= domain.end); });
     var width = 720, height = 210, pad = 22;
     var max = 1;
@@ -1002,7 +1003,7 @@ function restartServerInfoTimer() {
     stopServerInfoTimer();
     if (serverInfoModalIdx < 0 || !sessions[serverInfoModalIdx]) return;
     refreshOpenServerInfo();
-    serverInfoTimer = setInterval(refreshOpenServerInfo, getServerInfoRefreshSeconds() * 1000);
+    serverInfoTimer = setInterval(refreshOpenServerInfo, SERVER_INFO_REFRESH_MS);
 }
 
 function refreshOpenServerInfo() {
@@ -1074,7 +1075,7 @@ function renderServerInfoDetail(type, d, session) {
     if (type === 'network') {
         body.innerHTML = '<div class="server-detail-section">' +
             '<div class="server-detail-kv"><div><span>当前网卡</span><b>' + esc(ifaceName) + '</b></div><div><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div><div><span>网卡数量</span><b>' + esc(ifaces.length || 1) + '</b></div></div>' +
-            networkChartHtml(session, ifaceName) + '</div>';
+            networkChartHtml(session, ifaceName, SERVER_INFO_DETAIL_CHART_MINUTES) + '</div>';
     } else if (type === 'processes') {
         body.innerHTML = '<div class="server-table-wrap detail-table"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>完整命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div>';
     } else if (type === 'filesystems') {
@@ -1148,7 +1149,7 @@ function renderServerInfo(d, session) {
         '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div><div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
         '</div></div>' +
         '<div class="server-info-card wide network-card server-expandable" onclick="openServerInfoDetailModal(\'network\')" title="点击放大查看网络"><div class="server-card-open">放大</div><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onclick="event.stopPropagation()" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
-        '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName) + '</div>' +
+        '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName, SERVER_INFO_CHART_MINUTES) + '</div>' +
         '<div class="server-info-card wide server-priority-card server-expandable" onclick="openServerInfoDetailModal(\'processes\')" title="点击放大查看进程"><div class="server-card-open">放大</div><h4>进程</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div></div>' +
         '<div class="server-info-card wide server-priority-card server-expandable" onclick="openServerInfoDetailModal(\'filesystems\')" title="点击放大查看文件系统"><div class="server-card-open">放大</div><h4>文件系统</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>挂载点</th><th>已用/大小</th><th>使用率</th></tr></thead><tbody>' + fsRows + '</tbody></table></div></div>' +
         '</div>';
@@ -1721,7 +1722,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.20');
+    var current = clean(data.currentVersion || data.current, '0.5.21');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
@@ -2648,7 +2649,7 @@ function getSysInterval() {
 }
 
 function getServerInfoRefreshSeconds() {
-    return 1;
+    return SERVER_INFO_REFRESH_MS / 1000;
 }
 
 function changeSysInterval(delta) {
