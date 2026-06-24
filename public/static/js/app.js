@@ -939,47 +939,45 @@ function buildNetArea(path, items, width, height, pad, domainStart, domainEnd) {
 function buildNetLabels(items, key, max, width, height, pad, domainStart, domainEnd, cls) {
     if (!items.length) return '';
     var p = chartPadding(pad);
-    var plotW = Math.max(1, width - p.left - p.right);
-    var labelLimit = Math.max(3, Math.floor(plotW / 150));
-    var step = Math.max(1, Math.ceil(items.length / labelLimit));
     var seen = {};
     var picked = [];
-    function pick(idx) {
+    function pick(idx, kind) {
         if (idx < 0 || idx >= items.length || seen[idx]) return;
         seen[idx] = true;
-        picked.push(idx);
+        picked.push({ idx: idx, kind: kind });
     }
-    var peakIdx = 0;
-    var peakValue = -1;
+    var maxIdx = 0, minIdx = 0;
+    var maxValue = -Infinity, minValue = Infinity;
     items.forEach(function (item, idx) {
         var value = parseFloat(item[key]) || 0;
-        if (value > peakValue) {
-            peakValue = value;
-            peakIdx = idx;
+        if (value > maxValue) {
+            maxValue = value;
+            maxIdx = idx;
+        }
+        if (value < minValue) {
+            minValue = value;
+            minIdx = idx;
         }
     });
-    for (var i = 0; i < items.length; i += step) pick(i);
-    pick(peakIdx);
-    pick(items.length - 1);
-    picked.sort(function (a, b) { return a - b; });
-    var lastX = -Infinity;
-    var minGap = items.length <= labelLimit ? 84 : 120;
-    return picked.map(function (idx) {
+    pick(maxIdx, 'max');
+    pick(minIdx, 'min');
+    picked.sort(function (a, b) { return a.idx - b.idx; });
+    return picked.map(function (marker) {
+        var idx = marker.idx;
         var item = items[idx];
         var value = parseFloat(item[key]) || 0;
         var x = netPointX(item, idx, items, width, pad, domainStart, domainEnd);
-        if (x - lastX < minGap && idx !== items.length - 1 && idx !== peakIdx) return '';
-        lastX = x;
-        var label = fmtNetRate(value);
-        var y = netPointY(item, key, max, height, pad) + (cls === 'rx' ? 17 : -14);
+        var label = (marker.kind === 'min' ? '最小 ' : '最大 ') + fmtNetRate(value);
+        var baseY = netPointY(item, key, max, height, pad);
+        var y = baseY + (marker.kind === 'min' ? 18 : -14) + (cls === 'rx' ? 5 : -5);
         y = Math.max(p.top + 14, Math.min(height - p.bottom - 10, y));
         var anchor = x < p.left + 44 ? 'start' : (x > width - p.right - 44 ? 'end' : 'middle');
-        var labelWidth = Math.max(32, label.length * 7 + 12);
+        var labelWidth = Math.max(54, label.length * 7.2 + 12);
         var rectX = anchor === 'start' ? x - 4 : (anchor === 'end' ? x - labelWidth + 4 : x - labelWidth / 2);
         var rectY = y - 12;
         rectX = Math.max(p.left + 2, Math.min(width - labelWidth - 2, rectX));
         rectY = Math.max(2, Math.min(height - 18, rectY));
-        return '<g class="net-label-wrap ' + cls + '">' +
+        return '<g class="net-label-wrap ' + cls + ' ' + marker.kind + '">' +
             '<rect class="net-label-bg ' + cls + '" x="' + rectX.toFixed(1) + '" y="' + rectY.toFixed(1) + '" width="' + labelWidth.toFixed(1) + '" height="16" rx="5"/>' +
             '<text class="net-label ' + cls + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" text-anchor="' + anchor + '">' + esc(label) + '</text>' +
             '</g>';
@@ -992,11 +990,12 @@ function formatBeijingMinute(ts) {
             timeZone: 'Asia/Shanghai',
             hour: '2-digit',
             minute: '2-digit',
+            second: '2-digit',
             hour12: false
         }).format(new Date(ts)).replace(/\s/g, '');
     } catch (e) {
         var d = new Date(ts + 8 * 60 * 60 * 1000);
-        return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0');
+        return String(d.getUTCHours()).padStart(2, '0') + ':' + String(d.getUTCMinutes()).padStart(2, '0') + ':' + String(d.getUTCSeconds()).padStart(2, '0');
     }
 }
 
@@ -1045,7 +1044,7 @@ function buildNetHoverOverlay(items, max, width, height, pad, domainStart, domai
         var hitEnd = idx === items.length - 1 ? width : (x + nextX) / 2;
         var hitW = hitEnd - hitX;
         if (span === 1 && items.length === 1) hitW = width;
-        var tipW = 126, tipH = 50;
+        var tipW = 138, tipH = 50;
         var tipX = Math.max(4, Math.min(width - tipW - 4, x + 10));
         var tipY = p.top + 6;
         return '<g class="chart-hover net-hover">' +
@@ -1950,7 +1949,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.26');
+    var current = clean(data.currentVersion || data.current, '0.5.27');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
