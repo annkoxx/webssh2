@@ -825,6 +825,13 @@ function getResourceHistory(session) {
     return session && Array.isArray(session._resourceHistory) ? session._resourceHistory : [];
 }
 
+function resourcePointX(idx, history, width, pad) {
+    var plotW = Math.max(1, width - pad * 2);
+    var maxSpan = 179;
+    var offsetFromLatest = Math.max(0, history.length - 1 - idx);
+    return width - pad - Math.min(1, offsetFromLatest / maxSpan) * plotW;
+}
+
 function resourceSparklineHtml(session, key, fixedMax, cls) {
     var history = getResourceHistory(session).slice(-180);
     if (!history.length) return '<div class="server-summary-sparkline empty"></div>';
@@ -835,15 +842,14 @@ function resourceSparklineHtml(session, key, fixedMax, cls) {
         history.forEach(function (p) { max = Math.max(max, parseFloat(p[key]) || 0); });
         max = Math.max(1, max);
     }
-    var span = Math.max(1, history.length - 1);
     var path = history.map(function (p, idx) {
         var value = Math.max(0, parseFloat(p[key]) || 0);
-        var x = pad + (idx / span) * (width - pad * 2);
+        var x = resourcePointX(idx, history, width, pad);
         var y = height - pad - Math.min(1, value / max) * (height - pad * 2);
         return (idx ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
     }).join(' ');
-    var firstX = pad;
-    var lastX = pad + (history.length > 1 ? width - pad * 2 : 0);
+    var firstX = resourcePointX(0, history, width, pad);
+    var lastX = resourcePointX(history.length - 1, history, width, pad);
     var area = path + ' L' + lastX.toFixed(1) + ' ' + (height - pad) + ' L' + firstX.toFixed(1) + ' ' + (height - pad) + ' Z';
     var hover = buildResourceHoverOverlay(history, key, max, width, height, pad);
     return '<div class="server-summary-sparkline ' + esc(cls || key) + '">' +
@@ -863,13 +869,12 @@ function formatResourceSparkValue(key, value) {
 function buildResourceHoverOverlay(history, key, max, width, height, pad) {
     if (!history.length) return '';
     var labelMap = { cpu: 'CPU', mem: '内存', disk: '磁盘', conn: '连接' };
-    var span = Math.max(1, history.length - 1);
     return history.map(function (p, idx) {
         var value = Math.max(0, parseFloat(p[key]) || 0);
-        var x = pad + (idx / span) * (width - pad * 2);
-        var prevX = idx > 0 ? pad + ((idx - 1) / span) * (width - pad * 2) : pad;
-        var nextX = idx < history.length - 1 ? pad + ((idx + 1) / span) * (width - pad * 2) : width - pad;
-        var hitX = idx === 0 ? 0 : (prevX + x) / 2;
+        var x = resourcePointX(idx, history, width, pad);
+        var prevX = idx > 0 ? resourcePointX(idx - 1, history, width, pad) : pad;
+        var nextX = idx < history.length - 1 ? resourcePointX(idx + 1, history, width, pad) : width - pad;
+        var hitX = idx === 0 ? 0 : Math.min(prevX, x) + Math.abs(x - prevX) / 2;
         var hitEnd = idx === history.length - 1 ? width : (x + nextX) / 2;
         var hitW = hitEnd - hitX;
         var tipW = 74, tipH = 27;
@@ -1019,8 +1024,8 @@ function networkTimeAxisHtml(domain, pad, width) {
     var firstMinute = Math.ceil(domain.start / 60000) * 60000;
     for (var t = firstMinute; t < domain.end; t += 60000) ticks.push(t);
     ticks.push(domain.end);
-    if (ticks.length > 7) {
-        var step = Math.ceil((ticks.length - 1) / 6);
+    if (ticks.length > 5) {
+        var step = Math.ceil((ticks.length - 1) / 4);
         var compact = ticks.filter(function (_, i) { return i === 0 || i === ticks.length - 1 || i % step === 0; });
         if (compact[compact.length - 1] !== domain.end) compact.push(domain.end);
         ticks = compact;
@@ -1060,6 +1065,39 @@ function buildNetHoverOverlay(items, max, width, height, pad, domainStart, domai
     }).join('');
 }
 
+function buildNetHoverOverlay(items, max, width, height, pad, domainStart, domainEnd) {
+    if (!items.length) return '';
+    var p = chartPadding(pad);
+    var span = Math.max(1, items.length - 1);
+    return items.map(function (item, idx) {
+        var x = netPointX(item, idx, items, width, pad, domainStart, domainEnd);
+        var prevX = idx > 0 ? netPointX(items[idx - 1], idx - 1, items, width, pad, domainStart, domainEnd) : p.left;
+        var nextX = idx < items.length - 1 ? netPointX(items[idx + 1], idx + 1, items, width, pad, domainStart, domainEnd) : width - p.right;
+        var hitX = idx === 0 ? 0 : (prevX + x) / 2;
+        var hitEnd = idx === items.length - 1 ? width : (x + nextX) / 2;
+        var hitW = hitEnd - hitX;
+        if (span === 1 && items.length === 1) hitW = width;
+        var rxValue = parseFloat(item.rx) || 0;
+        var txValue = parseFloat(item.tx) || 0;
+        var sameValue = Math.abs(rxValue - txValue) < 0.5;
+        var tipW = 148, tipH = sameValue ? 45 : 58;
+        var tipX = Math.max(4, Math.min(width - tipW - 4, x + 10));
+        var tipY = p.top + 6;
+        var valueLines = sameValue ?
+            '<text class="net-hover-both" x="7" y="32">接收/发送 ' + esc(fmtNetRate(rxValue)) + '</text>' :
+            '<text class="net-hover-rx" x="7" y="31">接收 ' + esc(fmtNetRate(rxValue)) + '</text>' +
+            '<text class="net-hover-tx" x="7" y="47">发送 ' + esc(fmtNetRate(txValue)) + '</text>';
+        return '<g class="chart-hover net-hover">' +
+            '<rect class="chart-hover-hit" x="' + hitX.toFixed(1) + '" y="0" width="' + Math.max(3, hitW).toFixed(1) + '" height="' + height + '"/>' +
+            '<line class="chart-hover-line" x1="' + x.toFixed(1) + '" y1="' + p.top + '" x2="' + x.toFixed(1) + '" y2="' + (height - p.bottom) + '"/>' +
+            '<g class="chart-hover-tip" transform="translate(' + tipX.toFixed(1) + ' ' + tipY + ')">' +
+            '<rect width="' + tipW + '" height="' + tipH + '" rx="6"/>' +
+            '<text x="7" y="13">' + esc(formatBeijingMinute(item.t || Date.now())) + '</text>' +
+            valueLines +
+            '</g></g>';
+    }).join('');
+}
+
 function buildNetYAxis(max, width, height, pad) {
     var p = chartPadding(pad);
     var labels = '';
@@ -1073,9 +1111,13 @@ function buildNetYAxis(max, width, height, pad) {
 
 function networkChartHtml(session, ifaceName, minutes) {
     var history = getNetworkHistory(session, ifaceName).slice(-1800);
-    var domain = networkDomain(history, minutes || SERVER_INFO_CHART_MINUTES);
+    var chartMinutes = minutes || SERVER_INFO_CHART_MINUTES;
+    var isDetail = chartMinutes >= SERVER_INFO_DETAIL_CHART_MINUTES;
+    var domain = networkDomain(history, chartMinutes);
     history = history.filter(function (p) { return !p.t || (p.t >= domain.start && p.t <= domain.end); });
-    var width = 760, height = 210, pad = { top: 22, right: 22, bottom: 24, left: 72 };
+    var width = isDetail ? 900 : 760;
+    var height = isDetail ? 300 : 220;
+    var pad = isDetail ? { top: 28, right: 28, bottom: 32, left: 84 } : { top: 24, right: 24, bottom: 26, left: 74 };
     var max = 1;
     var rxPeak = 0, txPeak = 0;
     history.forEach(function (p) {
@@ -1103,7 +1145,7 @@ function networkChartHtml(session, ifaceName, minutes) {
         var x = chartPad.left + gx * ((width - chartPad.left - chartPad.right) / 6);
         grid += '<line class="net-grid-v" x1="' + x.toFixed(1) + '" y1="' + chartPad.top + '" x2="' + x.toFixed(1) + '" y2="' + (height - chartPad.bottom) + '"/>';
     }
-    return '<div class="server-net-chart">' +
+    return '<div class="server-net-chart' + (isDetail ? ' detail-net-chart' : '') + '">' +
         '<div class="server-net-chart-head"><div><b>实时网络曲线</b><span>最近 ' + networkSpanText(domain.span) + ' · 北京时间 · 当前单位：' + (serverInfoNetUnit === 'bits' ? 'bits/s' : 'B/s') + '</span></div><div class="server-net-legend"><span class="rx">接收</span><span class="tx">发送</span></div></div>' +
         '<div class="server-net-peaks"><span class="server-net-peak rx"><em>接收峰值</em><b>' + fmtNetRate(rxPeak) + '</b></span><span class="server-net-peak tx"><em>发送峰值</em><b>' + fmtNetRate(txPeak) + '</b></span></div>' +
         '<div class="server-net-canvas">' + empty +
@@ -1330,6 +1372,10 @@ function renderServerInfoDetail(type, d, session) {
 function renderServerInfo(d, session) {
     var body = document.getElementById('serverInfoBody');
     if (!body) return;
+    if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('server-iface-select')) {
+        if (serverInfoDetailType) renderServerInfoDetail(serverInfoDetailType, d, session);
+        return;
+    }
     var diskPct = percentOf(d.diskUsed, d.diskTotal);
     var cpu = parseFloat(d.cpuUsage) || 0;
     var ifaces = Array.isArray(d.interfaces) ? d.interfaces : [];
@@ -1950,7 +1996,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.29');
+    var current = clean(data.currentVersion || data.current, '0.5.30');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
