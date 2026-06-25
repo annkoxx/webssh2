@@ -1342,6 +1342,17 @@ function openServerInfoModal(idx) {
         title.classList.add('server-info-header-ip');
         title.title = '点击复制 IP';
         title.onclick = function () { copyIP(s.hostname); };
+        var titleRow = title.parentNode;
+        if (titleRow) {
+            var liveBadge = document.getElementById('serverInfoHeaderLive');
+            if (!liveBadge) {
+                liveBadge = document.createElement('span');
+                liveBadge.id = 'serverInfoHeaderLive';
+                liveBadge.className = 'server-info-live server-info-live-inline';
+                liveBadge.innerHTML = '<span></span>每 ' + getServerInfoRefreshSeconds() + ' 秒刷新';
+            }
+            titleRow.appendChild(liveBadge);
+        }
     }
     if (sub) {
         sub.textContent = '';
@@ -1534,18 +1545,8 @@ function renderServerInfo(d, session) {
     var txTotal = selectedIface ? selectedIface.txTotal : d.txTotal;
     var memPct = percentOf(d.memUsed, d.memTotal);
     var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
-    var cpuQuick = d.cpuModel || ((d.cpuCores || '?') + ' 核');
     var netUnitToggle = '<div class="server-net-unit-toggle"><button type="button" class="' + (serverInfoNetUnit === 'bytes' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bytes\')">MB/s</button><button type="button" class="' + (serverInfoNetUnit === 'bits' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bits\')">Mbps</button></div>';
     body.innerHTML =
-        '<div class="server-info-quicklook">' +
-        '<div class="server-info-quick-grid">' +
-        '<button type="button" onclick="openServerInfoDetailModal(\'cpu\')" title="点击放大查看 CPU 详情"><span>CPU</span><b title="' + escAttr(cpuQuick) + '">' + esc(cpuQuick) + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · ' + esc(d.arch || '-') + '</small></button>' +
-        '<button type="button" onclick="openServerInfoDetailModal(\'memory\')" title="点击放大查看内存详情"><span>内存</span><b>' + fmtB(d.memTotal) + '</b><small>已用 ' + fmtB(d.memUsed) + '</small></button>' +
-        '<button type="button" onclick="openServerInfoDetailModal(\'disk\')" title="点击放大查看硬盘详情"><span>硬盘</span><b>' + fmtB(d.diskTotal) + '</b><small>剩余 ' + fmtB(d.diskFree) + '</small></button>' +
-        '<button type="button" onclick="openServerInfoDetailModal(\'os\')" title="点击放大查看操作系统详情"><span>操作系统</span><b title="' + escAttr(d.os || '-') + '">' + esc(d.os || '-') + '</b><small>' + esc(d.kernelVersion || '-') + '</small></button>' +
-        '</div>' +
-        '<div class="server-info-live"><span></span>每 ' + getServerInfoRefreshSeconds() + ' 秒刷新</div>' +
-        '</div>' +
         '<div class="server-info-grid">' +
         '<div class="server-info-card wide server-summary-card server-expandable" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><div class="server-card-open">放大</div><h4>资源概览</h4><div class="server-summary-grid">' +
         '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>' + esc(d.cpuCores || '?') + ' 核</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
@@ -1553,10 +1554,14 @@ function renderServerInfo(d, session) {
         '<div><span>磁盘</span><b>' + diskPct + '%</b><small>剩余 ' + fmtB(d.diskFree) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
         '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
         '</div><div class="server-info-mini">CPU：用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div></div>' +
-        '<div class="server-info-card wide server-facts-card server-expandable" onclick="openServerInfoDetailModal(\'facts\')" title="点击放大查看基础信息"><div class="server-card-open">放大</div><h4>基础信息</h4><div class="server-info-facts">' +
-        '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
-        '<div><span>主机名</span><b>' + esc(d.hostname || '-') + '</b></div><div><span>架构</span><b>' + esc(d.arch || '-') + '</b></div>' +
-        '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div><div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
+        '<div class="server-info-card wide server-facts-card server-expandable" onclick="openServerInfoDetailModal(\'facts\')" title="点击放大查看基础信息"><div class="server-card-open">放大</div><h4>基础信息</h4><div class="server-info-facts server-info-facts-main">' +
+        '<div><span>CPU</span><b>' + esc(d.cpuModel || '-') + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · 当前 ' + cpu.toFixed(1) + '%</small></div>' +
+        '<div><span>内存</span><b>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '</b><small>使用率 ' + memPct + '%</small></div>' +
+        '<div><span>硬盘</span><b>' + fmtB(d.diskUsed) + ' / ' + fmtB(d.diskTotal) + '</b><small>剩余 ' + fmtB(d.diskFree) + ' · ' + diskPct + '%</small></div>' +
+        '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div>' +
+        '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div>' +
+        '<div class="facts-two"><span>架构</span><b>' + esc(d.arch || '-') + '</b><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
+        '<div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
         '</div></div>' +
         '<div class="server-info-card wide network-card server-expandable" onclick="openServerInfoDetailModal(\'network\')" title="点击放大查看网络"><div class="server-card-open">放大</div><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onclick="event.stopPropagation()" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
         '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName, SERVER_INFO_CHART_MINUTES) + '</div>' +
@@ -2132,7 +2137,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.34');
+    var current = clean(data.currentVersion || data.current, '0.5.35');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;

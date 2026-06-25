@@ -497,7 +497,8 @@ html[data-theme="light"] .server-info-card-modal{background:linear-gradient(145d
 .server-info-hero p{margin-top:5px;color:var(--t2);font-size:12px;word-break:break-word}
 .server-info-live{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;background:rgba(0,0,0,.18);border:1px solid rgba(0,255,136,.18);color:var(--ok);font-size:11px;white-space:nowrap}
 .server-info-live span{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 10px var(--ok);animation:stP 1.5s ease-in-out infinite}
-.server-info-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px}
+.server-info-live-inline{margin-left:6px;padding:5px 9px;font-size:11px;line-height:1}
+.server-info-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;align-items:stretch}
 .server-info-card{grid-column:span 4;min-width:0;padding:11px;border:1px solid rgba(255,255,255,.08);border-radius:14px;background:rgba(255,255,255,.055);backdrop-filter:blur(18px) saturate(1.35);-webkit-backdrop-filter:blur(18px) saturate(1.35);box-shadow:0 10px 26px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.06);transition:border-color .25s ease,box-shadow .25s ease}
 html[data-theme="light"] .server-info-card{background:rgba(255,255,255,.58);border-color:rgba(0,0,0,.06);box-shadow:0 12px 30px rgba(25,35,60,.08),inset 0 1px 0 rgba(255,255,255,.78)}
 .server-info-card:hover{border-color:rgba(0,212,255,.22);box-shadow:0 12px 34px rgba(0,0,0,.16),0 0 22px rgba(0,212,255,.06)}
@@ -513,6 +514,14 @@ html[data-theme="light"] .server-info-facts div,html[data-theme="light"] .server
 .server-info-facts span,.server-net-pair span{display:block;color:var(--t3);font-size:11px;margin-bottom:6px}
 .server-info-facts b,.server-net-pair b{display:block;color:var(--t1);font-size:13px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .server-facts-card .server-info-facts b{white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word}
+.server-info-facts small{display:block;color:var(--server-panel-soft,var(--t3));font-size:10px;line-height:1.25;margin-top:2px;grid-column:2}
+.server-facts-card,.server-summary-card{display:flex;flex-direction:column}
+.server-facts-card .server-info-facts,.server-summary-card .server-summary-grid{flex:1}
+.server-facts-card .server-info-facts-main{gap:6px}
+.server-facts-card .server-info-facts-main div{min-height:38px}
+.server-facts-card .server-info-facts-main .facts-two{grid-template-columns:minmax(50px,.2fr) minmax(0,.8fr) minmax(50px,.2fr) minmax(0,.8fr)}
+.server-facts-card .server-info-facts-main .facts-two span{align-self:center}
+.server-facts-card .server-info-facts-main .facts-two b{align-self:center}
 .srv-big{font-family:'JetBrains Mono','Fira Code',monospace;font-size:34px;font-weight:800;letter-spacing:-.05em;margin:-4px 0 8px;background:linear-gradient(135deg,var(--t1),var(--c1));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .srv-big.small{font-size:30px}
 .srv-meter{display:flex;flex-direction:column;gap:7px;margin:10px 0}
@@ -954,16 +963,7 @@ html[data-theme="dark"] .server-info-card-modal,html[data-theme="dark"] .server-
 .server-info-header-ip:hover{background:rgba(255,255,255,.08);color:var(--server-panel-text)}
 .server-info-hd.server-info-hd-compact{align-items:center;min-height:0;padding-top:10px;padding-bottom:10px}
 .server-info-hd.server-info-hd-compact .server-info-title-wrap{gap:0}
-.server-info-quicklook{display:flex;align-items:stretch;gap:10px;padding:10px;border:1px solid var(--server-panel-border);border-radius:12px;background:var(--server-panel-card);box-shadow:none}
-.server-info-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;flex:1;min-width:0}
-.server-info-quick-grid button{min-width:0;padding:8px 10px;border:1px solid var(--server-panel-border);border-radius:10px;background:var(--server-panel-card-soft);color:var(--server-panel-text);font:inherit;text-align:left;cursor:zoom-in;transition:border-color .18s ease,background .18s ease,box-shadow .18s ease,transform .18s ease}
-.server-info-quick-grid button:hover,.server-info-quick-grid button:focus-visible{border-color:rgba(255,255,255,.36);background:#050505;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset;outline:none;transform:translateY(-1px)}
-html[data-theme="light"] .server-info-quick-grid button:hover,html[data-theme="light"] .server-info-quick-grid button:focus-visible{border-color:rgba(17,24,39,.28);background:#f8fafc;box-shadow:0 0 0 1px rgba(17,24,39,.08) inset}
-@media(prefers-color-scheme:light){html:not([data-theme]) .server-info-quick-grid button:hover,html:not([data-theme]) .server-info-quick-grid button:focus-visible{border-color:rgba(17,24,39,.28);background:#f8fafc;box-shadow:0 0 0 1px rgba(17,24,39,.08) inset}}
-.server-info-quick-grid span{display:block;margin-bottom:5px;color:var(--server-panel-soft);font-size:11px;line-height:1.2}
-.server-info-quick-grid b{display:block;color:var(--server-panel-text);font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.server-info-quick-grid small{display:block;margin-top:4px;color:var(--server-panel-soft);font-size:10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.server-info-quicklook .server-info-live{align-self:center;flex-shrink:0;background:var(--server-panel-card);border-color:var(--server-panel-border);color:var(--server-panel-text)}
+.server-info-hd.server-info-hd-compact .server-info-title-wrap span{flex-wrap:wrap}
 
 html[data-theme="dark"] .login-card{border-color:rgba(255,255,255,.2)!important;box-shadow:0 0 0 1px rgba(255,255,255,.08),0 18px 52px rgba(0,0,0,.55)!important}
 html[data-theme="dark"] .login-card::after{content:'';position:absolute;inset:0;border-radius:inherit;border:1px solid rgba(0,212,255,.22);pointer-events:none}
@@ -973,8 +973,8 @@ html[data-theme="dark"] .settings-panel .checkbox-custom::after,html[data-theme=
 html[data-theme="dark"]{--brd:rgba(255,255,255,.18);--inp:#030303;--terminal-surface-soft:#060606;--server-panel-border:rgba(255,255,255,.2);--server-panel-grid:rgba(255,255,255,.18);--server-panel-grid-soft:rgba(255,255,255,.1)}
 html[data-theme="dark"] .settings-panel,html[data-theme="dark"] .drawer-body,html[data-theme="dark"] .sftp-panel,html[data-theme="dark"] .cmd-bar{border-color:rgba(255,255,255,.2)!important;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset!important}
 html[data-theme="dark"] .drawer-hd,html[data-theme="dark"] .sftp-header,html[data-theme="dark"] .script-toolbar,html[data-theme="dark"] .script-form{border-color:rgba(255,255,255,.16)!important}
-html[data-theme="dark"] .set-group,html[data-theme="dark"] .update-version-card,html[data-theme="dark"] .server-info-quick-grid button{border-color:rgba(255,255,255,.24)!important;background:#020202!important}
-html[data-theme="dark"] .set-group:hover,html[data-theme="dark"] .server-info-quick-grid button:hover,html[data-theme="dark"] .server-info-quick-grid button:focus-visible{border-color:rgba(0,212,255,.48)!important;box-shadow:0 0 0 1px rgba(0,212,255,.18) inset!important}
+html[data-theme="dark"] .set-group,html[data-theme="dark"] .update-version-card{border-color:rgba(255,255,255,.24)!important;background:#020202!important}
+html[data-theme="dark"] .set-group:hover{border-color:rgba(0,212,255,.48)!important;box-shadow:0 0 0 1px rgba(0,212,255,.18) inset!important}
 html[data-theme="dark"] .bm-item,html[data-theme="dark"] .conn-security-note,html[data-theme="dark"] .drawer-add,html[data-theme="dark"] .script-tool-btn,html[data-theme="dark"] .script-account-btn{border-color:rgba(255,255,255,.16)!important;background:#020202!important}
 html[data-theme="dark"] .bm-item:hover,html[data-theme="dark"] .drawer-add:hover,html[data-theme="dark"] .script-tool-btn:hover{border-color:rgba(0,212,255,.42)!important;background:#041012!important}
 html[data-theme="dark"] .sftp-row{border-color:rgba(255,255,255,.12);background:#000}
@@ -1002,7 +1002,7 @@ html[data-theme="dark"] .server-net-canvas .chart-hover-line,html[data-theme="da
     html:not([data-theme]){--brd:rgba(255,255,255,.18);--inp:#030303;--terminal-surface-soft:#060606;--server-panel-border:rgba(255,255,255,.2);--server-panel-grid:rgba(255,255,255,.18);--server-panel-grid-soft:rgba(255,255,255,.1)}
     html:not([data-theme]) .settings-panel,html:not([data-theme]) .drawer-body,html:not([data-theme]) .sftp-panel,html:not([data-theme]) .cmd-bar{border-color:rgba(255,255,255,.2)!important;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset!important}
     html:not([data-theme]) .drawer-hd,html:not([data-theme]) .sftp-header,html:not([data-theme]) .script-toolbar,html:not([data-theme]) .script-form{border-color:rgba(255,255,255,.16)!important}
-    html:not([data-theme]) .set-group,html:not([data-theme]) .update-version-card,html:not([data-theme]) .server-info-quick-grid button{border-color:rgba(255,255,255,.24)!important;background:#020202!important}
+    html:not([data-theme]) .set-group,html:not([data-theme]) .update-version-card{border-color:rgba(255,255,255,.24)!important;background:#020202!important}
     html:not([data-theme]) .bm-item,html:not([data-theme]) .conn-security-note,html:not([data-theme]) .drawer-add,html:not([data-theme]) .script-tool-btn,html:not([data-theme]) .script-account-btn{border-color:rgba(255,255,255,.16)!important;background:#020202!important}
     html:not([data-theme]) .sftp-row{border-color:rgba(255,255,255,.12);background:#000}
     html:not([data-theme]) .sftp-path-input,html:not([data-theme]) .script-input,html:not([data-theme]) .script-textarea,html:not([data-theme]) .cmd-input,html:not([data-theme]) .cmd-send{border-color:rgba(255,255,255,.18)!important;background:#020202!important;box-shadow:none!important}
@@ -1011,11 +1011,7 @@ html[data-theme="dark"] .server-net-canvas .chart-hover-line,html[data-theme="da
     html:not([data-theme]) .term-edge-btns .edge-btn{border-color:rgba(0,212,255,.22)!important}
     html:not([data-theme]) .term-body{border:1px solid rgba(255,255,255,.12)}
 }
-@media(max-width:860px){
-    .server-info-quicklook{flex-direction:column}
-    .server-info-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-    .server-info-quicklook .server-info-live{align-self:flex-start}
-}
 @media(max-width:520px){
-    .server-info-quick-grid{grid-template-columns:1fr}
+    .server-facts-card .server-info-facts-main .facts-two{grid-template-columns:1fr;gap:3px}
+    .server-info-facts small{grid-column:1}
 }
