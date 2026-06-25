@@ -1008,6 +1008,31 @@ function buildNetArea(path, items, width, height, pad, domainStart, domainEnd) {
     return path + ' L' + lastX + ' ' + (height - p.bottom) + ' L' + firstX + ' ' + (height - p.bottom) + ' Z';
 }
 
+function buildNetBars(items, max, width, height, pad, domainStart, domainEnd) {
+    if (!items.length) return '';
+    var p = chartPadding(pad);
+    var baseY = height - p.bottom;
+    var plotH = Math.max(1, height - p.top - p.bottom);
+    return items.map(function (item, idx) {
+        var x = netPointX(item, idx, items, width, pad, domainStart, domainEnd);
+        var prevX = idx > 0 ? netPointX(items[idx - 1], idx - 1, items, width, pad, domainStart, domainEnd) : p.left;
+        var nextX = idx < items.length - 1 ? netPointX(items[idx + 1], idx + 1, items, width, pad, domainStart, domainEnd) : width - p.right;
+        var slotW = Math.max(3, Math.min(nextX - prevX, (width - p.left - p.right) / Math.max(1, items.length - 1)));
+        var barW = Math.max(2.2, Math.min(9, slotW * 0.72));
+        var halfW = Math.max(1.1, barW / 2 - 0.4);
+        var rx = Math.max(0, parseFloat(item.rx) || 0);
+        var tx = Math.max(0, parseFloat(item.tx) || 0);
+        var rxH = Math.max(rx > 0 ? 1 : 0, (rx / max) * plotH);
+        var txH = Math.max(tx > 0 ? 1 : 0, (tx / max) * plotH);
+        var rxX = x - barW / 2;
+        var txX = x + 0.4;
+        return '<g class="net-bar-pair">' +
+            (rxH ? '<rect class="net-bar rx" x="' + rxX.toFixed(1) + '" y="' + (baseY - rxH).toFixed(1) + '" width="' + halfW.toFixed(1) + '" height="' + rxH.toFixed(1) + '" rx="1.2"/>' : '') +
+            (txH ? '<rect class="net-bar tx" x="' + txX.toFixed(1) + '" y="' + (baseY - txH).toFixed(1) + '" width="' + halfW.toFixed(1) + '" height="' + txH.toFixed(1) + '" rx="1.2"/>' : '') +
+            '</g>';
+    }).join('');
+}
+
 function buildNetLabels(items, key, max, width, height, pad, domainStart, domainEnd, cls) {
     if (!items.length) return '';
     var p = chartPadding(pad);
@@ -1193,14 +1218,9 @@ function networkChartHtml(session, ifaceName, minutes) {
         txPeak = Math.max(txPeak, tx);
         max = Math.max(max, rx, tx);
     });
-    var rxPath = buildNetPath(history, 'rx', max, width, height, pad, domain.start, domain.end);
-    var txPath = buildNetPath(history, 'tx', max, width, height, pad, domain.start, domain.end);
-    var rxArea = buildNetArea(rxPath, history, width, height, pad, domain.start, domain.end);
-    var txArea = buildNetArea(txPath, history, width, height, pad, domain.start, domain.end);
-    var rxLabels = buildNetLabels(history, 'rx', max, width, height, pad, domain.start, domain.end, 'rx');
-    var txLabels = buildNetLabels(history, 'tx', max, width, height, pad, domain.start, domain.end, 'tx');
+    var netBars = buildNetBars(history, max, width, height, pad, domain.start, domain.end);
     var hoverOverlay = buildNetHoverOverlay(history, max, width, height, pad, domain.start, domain.end);
-    var empty = history.length < 2 ? '<div class="server-net-empty">等待下一次刷新后生成实时曲线</div>' : '';
+    var empty = history.length < 2 ? '<div class="server-net-empty">等待下一次刷新后生成实时流量图</div>' : '';
     var grid = '';
     var chartPad = chartPadding(pad);
     for (var gi = 0; gi <= 4; gi++) {
@@ -1212,18 +1232,13 @@ function networkChartHtml(session, ifaceName, minutes) {
         grid += '<line class="net-grid-v" x1="' + x.toFixed(1) + '" y1="' + chartPad.top + '" x2="' + x.toFixed(1) + '" y2="' + (height - chartPad.bottom) + '"/>';
     }
     return '<div class="server-net-chart' + (isDetail ? ' detail-net-chart' : '') + '">' +
-        '<div class="server-net-chart-head"><div><b>实时网络曲线</b><span>最近 ' + networkSpanText(domain.span) + ' · 北京时间 · 当前单位：' + (serverInfoNetUnit === 'bits' ? 'bits/s' : 'B/s') + '</span></div><div class="server-net-legend"><span class="rx">接收</span><span class="tx">发送</span></div></div>' +
+        '<div class="server-net-chart-head"><div><b>实时网络流量</b><span>最近 ' + networkSpanText(domain.span) + ' · 北京时间 · 当前单位：' + (serverInfoNetUnit === 'bits' ? 'bits/s' : 'B/s') + '</span></div><div class="server-net-legend"><span class="rx">接收</span><span class="tx">发送</span></div></div>' +
         '<div class="server-net-peaks"><span class="server-net-peak rx"><em>接收峰值</em><b>' + fmtNetRate(rxPeak) + '</b></span><span class="server-net-peak tx"><em>发送峰值</em><b>' + fmtNetRate(txPeak) + '</b></span></div>' +
         '<div class="server-net-canvas">' + empty +
         '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" aria-hidden="true">' +
         grid +
         buildNetYAxis(max, width, height, pad) +
-        (rxArea ? '<path class="net-area rx" d="' + rxArea + '"/>' : '') +
-        (txArea ? '<path class="net-area tx" d="' + txArea + '"/>' : '') +
-        (rxPath ? '<path class="net-line rx" d="' + rxPath + '"/>' : '') +
-        (txPath ? '<path class="net-line tx" d="' + txPath + '"/>' : '') +
-        rxLabels +
-        txLabels +
+        netBars +
         hoverOverlay +
         '</svg></div>' +
         '<div class="server-net-axis">' + networkTimeAxisHtml(domain, pad, width) + '</div>' +
@@ -1576,11 +1591,11 @@ function renderServerInfo(d, session) {
         '<div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
         '</div></div>' +
         '<div class="server-info-card wide server-summary-card server-expandable" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><div class="server-card-open">放大</div><h4>资源概览</h4><div class="server-summary-grid">' +
-        '<div><span>CPU</span><b>' + cpuRemainPct + '</b><small>剩余 · 已用 ' + cpu.toFixed(1) + '%</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
-        '<div><span>内存</span><b>' + memRemainPct + '</b><small>剩余 ' + fmtB(memAvail) + ' / ' + fmtB(d.memTotal) + '</small>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
-        '<div><span>磁盘</span><b>' + diskRemainPct + '</b><small>剩余 ' + fmtB(d.diskFree) + ' / ' + fmtB(d.diskTotal) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
-        '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
-        '</div><div class="server-info-mini">CPU：用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div></div>' +
+        '<div><span>CPU</span><b>' + cpuRemainPct + '</b>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
+        '<div><span>内存</span><b>' + memRemainPct + '</b>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
+        '<div><span>磁盘</span><b>' + diskRemainPct + '</b>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
+        '<div><span>连接</span><b>' + esc(connTotal) + '</b>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
+        '</div></div>' +
         '<div class="server-info-card wide network-card server-expandable" onclick="openServerInfoDetailModal(\'network\')" title="点击放大查看网络"><div class="server-card-open">放大</div><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onclick="event.stopPropagation()" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
         '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName, SERVER_INFO_CHART_MINUTES) + '</div>' +
         '<div class="server-info-card wide server-priority-card server-expandable" onclick="openServerInfoDetailModal(\'processes\')" title="点击放大查看进程"><div class="server-card-open">放大</div><h4>进程</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div></div>' +
@@ -2155,7 +2170,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.35');
+    var current = clean(data.currentVersion || data.current, '0.5.37');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
@@ -2367,10 +2382,10 @@ function sortScriptBookmarks(bms) {
     var before = bms.map(function (b) { return scriptBookmarkKey(b) + '\u0000' + parseScriptUseCount(b) + '\u0000' + parseScriptLastUsed(b); }).join('\u0001');
     bms.forEach(function (b, i) { if (b) b.__scriptSortIndex = i; });
     bms.sort(function (a, b) {
-        var au = parseScriptUseCount(a), bu = parseScriptUseCount(b);
-        if (bu !== au) return bu - au;
         var at = parseScriptLastUsed(a), bt = parseScriptLastUsed(b);
         if (bt !== at) return bt - at;
+        var au = parseScriptUseCount(a), bu = parseScriptUseCount(b);
+        if (bu !== au) return bu - au;
         return (a.__scriptSortIndex || 0) - (b.__scriptSortIndex || 0);
     });
     bms.forEach(function (b) { if (b) delete b.__scriptSortIndex; });
@@ -2567,9 +2582,9 @@ function runScript(i) {
     var b = bms[i]; if (!b) return;
     if (activeIdx < 0 || !sessions[activeIdx] || !sessions[activeIdx].ws || sessions[activeIdx].ws.readyState !== 1) { showToast('无活动连接', 'error'); return; }
     sessions[activeIdx].ws.send(b.cmd + '\n');
-    b.useCount = parseScriptUseCount(b) + 1;
-    b.lastUsed = Date.now();
-    sortScriptBookmarks(bms);
+    b = Object.assign({}, b, { useCount: parseScriptUseCount(b) + 1, lastUsed: Date.now() });
+    bms.splice(i, 1);
+    bms.unshift(b);
     saveBM(SBK, bms);
     renderScriptBookmarks();
     syncLocalScriptsIfLogged();
