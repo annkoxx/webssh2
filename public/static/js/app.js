@@ -842,15 +842,18 @@ function resourceSparklineHtml(session, key, fixedMax, cls) {
         history.forEach(function (p) { max = Math.max(max, parseFloat(p[key]) || 0); });
         max = Math.max(1, max);
     }
-    var path = history.map(function (p, idx) {
+    var points = history.map(function (p, idx) {
         var value = Math.max(0, parseFloat(p[key]) || 0);
         var x = resourcePointX(idx, history, width, pad);
         var y = height - pad - Math.min(1, value / max) * (height - pad * 2);
-        return (idx ? 'L' : 'M') + x.toFixed(1) + ' ' + y.toFixed(1);
+        return { x: x, y: y };
+    });
+    var path = points.slice().reverse().map(function (p, idx) {
+        return (idx ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1);
     }).join(' ');
-    var firstX = resourcePointX(0, history, width, pad);
-    var lastX = resourcePointX(history.length - 1, history, width, pad);
-    var area = path + ' L' + lastX.toFixed(1) + ' ' + (height - pad) + ' L' + firstX.toFixed(1) + ' ' + (height - pad) + ' Z';
+    var oldestX = points[0].x;
+    var latestX = points[points.length - 1].x;
+    var area = path + ' L' + oldestX.toFixed(1) + ' ' + (height - pad) + ' L' + latestX.toFixed(1) + ' ' + (height - pad) + ' Z';
     var hover = buildResourceHoverOverlay(history, key, max, width, height, pad);
     return '<div class="server-summary-sparkline ' + esc(cls || key) + '">' +
         '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" aria-hidden="true">' +
@@ -1175,23 +1178,43 @@ function clearChartHoverActive(root) {
     });
 }
 
-function activateChartHover(target) {
+function chartSvgClientXToViewBox(svg, clientX) {
+    if (!svg || !svg.getBoundingClientRect || typeof clientX !== 'number') return null;
+    var rect = svg.getBoundingClientRect();
+    if (!rect.width) return null;
+    var vb = svg.viewBox && svg.viewBox.baseVal ? svg.viewBox.baseVal : null;
+    var minX = vb ? vb.x : 0;
+    var width = vb && vb.width ? vb.width : rect.width;
+    var x = minX + ((clientX - rect.left) / rect.width) * width;
+    return Math.max(minX, Math.min(minX + width, x));
+}
+
+function moveChartHoverLine(hover, svg, clientX) {
+    var x = chartSvgClientXToViewBox(svg, clientX);
+    var line = hover && hover.querySelector ? hover.querySelector('.chart-hover-line') : null;
+    if (x === null || !line) return;
+    line.setAttribute('x1', x.toFixed(1));
+    line.setAttribute('x2', x.toFixed(1));
+}
+
+function activateChartHover(target, clientX) {
     var hover = closestChartElement(target, '.chart-hover');
     if (!hover) return;
     var svg = closestChartElement(hover, 'svg');
     if (!svg) return;
     clearChartHoverActive(svg);
+    moveChartHoverLine(hover, svg, clientX);
     hover.classList.add('active');
 }
 
 document.addEventListener('pointermove', function (e) {
     var hit = closestChartElement(e.target, '.chart-hover-hit');
-    if (hit) activateChartHover(hit);
+    if (hit) activateChartHover(hit, e.clientX);
 }, { passive: true });
 
 document.addEventListener('pointerdown', function (e) {
     var hit = closestChartElement(e.target, '.chart-hover-hit');
-    if (hit) activateChartHover(hit);
+    if (hit) activateChartHover(hit, e.clientX);
 }, { passive: true });
 
 document.addEventListener('pointerout', function (e) {
@@ -1246,8 +1269,18 @@ function openServerInfoModal(idx) {
     var modal = document.getElementById('serverInfoModal');
     var title = document.getElementById('serverInfoTitle');
     var sub = document.getElementById('serverInfoSub');
-    if (title) title.textContent = s.hostname;
-    if (sub) sub.textContent = (s.username || 'root') + '@' + s.hostname + ':' + (s.port || 22);
+    var hd = modal ? modal.querySelector('.server-info-hd') : null;
+    if (hd) hd.classList.add('server-info-hd-compact');
+    if (title) {
+        title.textContent = s.hostname;
+        title.classList.add('server-info-header-ip');
+        title.title = '点击复制 IP';
+        title.onclick = function () { copyIP(s.hostname); };
+    }
+    if (sub) {
+        sub.textContent = '';
+        sub.style.display = 'none';
+    }
     if (s._lastMetrics) renderServerInfo(s._lastMetrics, s);
     else document.getElementById('serverInfoBody').innerHTML = '<div class="server-info-loading"><span></span>正在读取服务器信息...</div>';
     modal.classList.add('show');
@@ -1404,10 +1437,16 @@ function renderServerInfo(d, session) {
     var txTotal = selectedIface ? selectedIface.txTotal : d.txTotal;
     var memPct = percentOf(d.memUsed, d.memTotal);
     var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
+    var cpuQuick = d.cpuModel || ((d.cpuCores || '?') + ' 核');
     var netUnitToggle = '<div class="server-net-unit-toggle"><button type="button" class="' + (serverInfoNetUnit === 'bytes' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bytes\')">MB/s</button><button type="button" class="' + (serverInfoNetUnit === 'bits' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bits\')">Mbps</button></div>';
     body.innerHTML =
-        '<div class="server-info-hero">' +
-        '<div><div class="server-info-kicker">当前连接</div><h3 class="server-info-host-copy" onclick="copyIP(sessions[serverInfoModalIdx].hostname)" title="点击复制 IP">' + esc(session.hostname) + '</h3><p>' + esc(d.hostname || '-') + ' · ' + esc(d.os || '-') + '</p></div>' +
+        '<div class="server-info-quicklook">' +
+        '<div class="server-info-quick-grid">' +
+        '<div><span>CPU</span><b title="' + escAttr(cpuQuick) + '">' + esc(cpuQuick) + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · ' + esc(d.arch || '-') + '</small></div>' +
+        '<div><span>内存</span><b>' + fmtB(d.memTotal) + '</b><small>已用 ' + fmtB(d.memUsed) + '</small></div>' +
+        '<div><span>硬盘</span><b>' + fmtB(d.diskTotal) + '</b><small>剩余 ' + fmtB(d.diskFree) + '</small></div>' +
+        '<div><span>操作系统</span><b title="' + escAttr(d.os || '-') + '">' + esc(d.os || '-') + '</b><small>' + esc(d.kernelVersion || '-') + '</small></div>' +
+        '</div>' +
         '<div class="server-info-live"><span></span>每 ' + getServerInfoRefreshSeconds() + ' 秒刷新</div>' +
         '</div>' +
         '<div class="server-info-grid">' +
@@ -1996,7 +2035,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.30');
+    var current = clean(data.currentVersion || data.current, '0.5.31');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;

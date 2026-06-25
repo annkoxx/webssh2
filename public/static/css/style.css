@@ -941,3 +941,40 @@ html[data-theme="light"] .cmd-send:hover{background:#374151;color:#fff;border-co
     .server-net-chart.detail-net-chart .server-net-canvas,.server-detail-pop-body .server-net-canvas{height:320px;min-height:320px}
     .server-net-axis{font-size:10.5px}
 }
+
+/* Dark mode black pass: keep the app flat black while preserving readable borders. */
+:root,html[data-theme="dark"]{--bg:#000;--card:#000;--inp:#050505;--term-bg:#000;--orb-opacity:0;--server-panel-bg:#000;--server-panel-card:#000;--server-panel-card-soft:#000;--terminal-surface:#000;--terminal-surface-soft:#050505}
+html[data-theme="dark"],html[data-theme="dark"] body{background:#000!important}
+html[data-theme="dark"] .bg-animation,html[data-theme="dark"] .gradient-orb,html[data-theme="dark"] #particles,html[data-theme="dark"] .custom-bg{display:none!important}
+html[data-theme="dark"] .glass-card,html[data-theme="dark"] .glass-bar,html[data-theme="dark"] .settings-panel,html[data-theme="dark"] .settings-hd,html[data-theme="dark"] .settings-body,html[data-theme="dark"] .set-group,html[data-theme="dark"] .drawer-body,html[data-theme="dark"] .sftp-panel,html[data-theme="dark"] .cmd-bar,html[data-theme="dark"] .cmd-input,html[data-theme="dark"] .cmd-send,html[data-theme="dark"] .modal-card,html[data-theme="dark"] .auth-card,html[data-theme="dark"] .account-admin-card{background:#000!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+html[data-theme="dark"] .input-wrapper input,html[data-theme="dark"] textarea,html[data-theme="dark"] .script-input,html[data-theme="dark"] .script-textarea,html[data-theme="dark"] .sftp-path-input,html[data-theme="dark"] .bm-item,html[data-theme="dark"] .ssh-tab,html[data-theme="dark"] .tb-btn,html[data-theme="dark"] .tab-add-btn,html[data-theme="dark"] .edge-btn,html[data-theme="dark"] .metric-pill{background:#050505!important;box-shadow:none!important}
+html[data-theme="dark"] .server-info-card-modal,html[data-theme="dark"] .server-detail-pop-card,html[data-theme="dark"] .server-info-body,html[data-theme="dark"] .server-detail-pop-body,html[data-theme="dark"] .server-info-card,html[data-theme="dark"] .server-net-chart,html[data-theme="dark"] .server-net-canvas,html[data-theme="dark"] .server-summary-grid div,html[data-theme="dark"] .server-info-facts div,html[data-theme="dark"] .server-net-pair div,html[data-theme="dark"] .server-detail-kv div{background:#000!important;box-shadow:none!important}
+
+.server-info-header-ip{cursor:copy;border-radius:6px;padding:2px 4px;margin-left:-4px;transition:background .18s ease,color .18s ease}
+.server-info-header-ip:hover{background:rgba(255,255,255,.08);color:var(--server-panel-text)}
+.server-info-hd.server-info-hd-compact{align-items:center;min-height:0;padding-top:10px;padding-bottom:10px}
+.server-info-hd.server-info-hd-compact .server-info-title-wrap{gap:0}
+.server-info-quicklook{display:flex;align-items:stretch;gap:10px;padding:10px;border:1px solid var(--server-panel-border);border-radius:12px;background:var(--server-panel-card);box-shadow:none}
+.server-info-quick-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;flex:1;min-width:0}
+.server-info-quick-grid div{min-width:0;padding:8px 10px;border:1px solid var(--server-panel-border);border-radius:10px;background:var(--server-panel-card-soft)}
+.server-info-quick-grid span{display:block;margin-bottom:5px;color:var(--server-panel-soft);font-size:11px;line-height:1.2}
+.server-info-quick-grid b{display:block;color:var(--server-panel-text);font-size:14px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.server-info-quick-grid small{display:block;margin-top:4px;color:var(--server-panel-soft);font-size:10px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.server-info-quicklook .server-info-live{align-self:center;flex-shrink:0;background:var(--server-panel-card);border-color:var(--server-panel-border);color:var(--server-panel-text)}
+
+.server-net-canvas .chart-hover-line,.server-summary-sparkline .chart-hover-line{stroke:var(--net-hover-line,#fff)!important;stroke-width:1.8;stroke-dasharray:5 5;opacity:1;vector-effect:non-scaling-stroke}
+html[data-theme="dark"] .server-net-canvas .chart-hover-line,html[data-theme="dark"] .server-summary-sparkline .chart-hover-line{stroke:#fff!important}
+
+@media(prefers-color-scheme:dark){
+    html:not([data-theme]){--bg:#000;--card:#000;--inp:#050505;--term-bg:#000;--orb-opacity:0;--server-panel-bg:#000;--server-panel-card:#000;--server-panel-card-soft:#000;--terminal-surface:#000;--terminal-surface-soft:#050505}
+    html:not([data-theme]),html:not([data-theme]) body{background:#000!important}
+    html:not([data-theme]) .bg-animation,html:not([data-theme]) .gradient-orb,html:not([data-theme]) #particles,html:not([data-theme]) .custom-bg{display:none!important}
+}
+@media(max-width:860px){
+    .server-info-quicklook{flex-direction:column}
+    .server-info-quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .server-info-quicklook .server-info-live{align-self:flex-start}
+}
+@media(max-width:520px){
+    .server-info-quick-grid{grid-template-columns:1fr}
+}
