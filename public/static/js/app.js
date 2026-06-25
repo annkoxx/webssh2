@@ -1296,6 +1296,13 @@ function fmtPct(v) {
     return v.toFixed(v >= 10 ? 0 : 1) + '%';
 }
 
+function fmtRemainPct(usedPct) {
+    var used = parseFloat(usedPct) || 0;
+    var v = 100 - used;
+    v = Math.max(0, Math.min(100, v));
+    return v.toFixed(Math.abs(used - Math.round(used)) > 0.001 ? 1 : 0) + '%';
+}
+
 function fmtUptimeLong(secs) {
     secs = parseInt(secs) || 0;
     var d = Math.floor(secs / 86400);
@@ -1446,6 +1453,10 @@ function renderServerInfoDetail(type, d, session) {
     var diskPct = percentOf(d.diskUsed, d.diskTotal);
     var memPct = percentOf(d.memUsed, d.memTotal);
     var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
+    var cpuRemainPct = fmtRemainPct(cpu);
+    var memRemainPct = fmtRemainPct(memPct);
+    var diskRemainPct = fmtRemainPct(diskPct);
+    var memAvail = d.memAvailable || d.memFree;
     var cb = d.cpuBreakdown || {};
     var procRows = (Array.isArray(d.processes) ? d.processes : []).map(function (p) {
         return '<tr><td>' + esc(p.pid) + '</td><td>' + esc(p.user) + '</td><td>' + esc(fmtKb(p.rss)) + '</td><td>' + esc(fmtPct(p.cpu)) + '</td><td title="' + esc(p.cmd || p.name) + '">' + esc(p.cmd || p.name || '-') + '</td></tr>';
@@ -1493,17 +1504,19 @@ function renderServerInfoDetail(type, d, session) {
             '</div>';
     } else if (type === 'facts') {
         body.innerHTML = '<div class="server-info-facts detail-facts">' +
-            '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>内核版本</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
-            '<div><span>主机名</span><b>' + esc(d.hostname || '-') + '</b></div><div><span>架构</span><b>' + esc(d.arch || '-') + '</b></div>' +
-            '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div><div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
-            '<div><span>CPU 型号</span><b>' + esc(d.cpuModel || '-') + '</b></div><div><span>CPU 核心</span><b>' + esc(d.cpuCores || '-') + '</b></div>' +
+            '<div><span>CPU</span><b>' + esc(d.cpuModel || '-') + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · 剩余 ' + cpuRemainPct + '</small></div>' +
+            '<div><span>内存</span><b>' + fmtB(memAvail) + ' / ' + fmtB(d.memTotal) + '</b><small>剩余 ' + memRemainPct + '</small></div>' +
+            '<div><span>硬盘</span><b>' + fmtB(d.diskFree) + ' / ' + fmtB(d.diskTotal) + '</b><small>剩余 ' + diskRemainPct + '</small></div>' +
+            '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div><div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div>' +
+            '<div><span>架构</span><b>' + esc(d.arch || '-') + '</b></div><div><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
+            '<div><span>主机名</span><b>' + esc(d.hostname || '-') + '</b></div><div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
             '</div>';
     } else {
         body.innerHTML = '<div class="server-summary-grid detail-summary">' +
-            '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
-            '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '，可用 ' + fmtB(d.memAvailable || d.memFree) + '</small>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
+            '<div><span>CPU</span><b>' + cpuRemainPct + '</b><small>剩余 · 已用 ' + cpu.toFixed(1) + '%</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
+            '<div><span>内存</span><b>' + memRemainPct + '</b><small>剩余 ' + fmtB(memAvail) + ' / ' + fmtB(d.memTotal) + '</small>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
             '<div><span>Swap</span><b>' + percentOf(d.swapUsed, d.swapTotal) + '%</b><small>' + fmtB(d.swapUsed) + ' / ' + fmtB(d.swapTotal) + '</small></div>' +
-            '<div><span>磁盘</span><b>' + diskPct + '%</b><small>' + fmtB(d.diskUsed) + ' / ' + fmtB(d.diskTotal) + '，剩余 ' + fmtB(d.diskFree) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
+            '<div><span>磁盘</span><b>' + diskRemainPct + '</b><small>剩余 ' + fmtB(d.diskFree) + ' / ' + fmtB(d.diskTotal) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
             '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
             '<div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b><small>运行 ' + esc(fmtUptimeLong(d.uptime)) + '</small></div>' +
             '</div>';
@@ -1545,24 +1558,29 @@ function renderServerInfo(d, session) {
     var txTotal = selectedIface ? selectedIface.txTotal : d.txTotal;
     var memPct = percentOf(d.memUsed, d.memTotal);
     var connTotal = (parseInt(d.tcpCount) || 0) + (parseInt(d.udpCount) || 0);
+    var cpuRemainPct = fmtRemainPct(cpu);
+    var memRemainPct = fmtRemainPct(memPct);
+    var diskRemainPct = fmtRemainPct(diskPct);
+    var memAvail = d.memAvailable || d.memFree;
     var netUnitToggle = '<div class="server-net-unit-toggle"><button type="button" class="' + (serverInfoNetUnit === 'bytes' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bytes\')">MB/s</button><button type="button" class="' + (serverInfoNetUnit === 'bits' ? 'active' : '') + '" onclick="event.stopPropagation();changeServerNetUnit(\'bits\')">Mbps</button></div>';
     body.innerHTML =
         '<div class="server-info-grid">' +
-        '<div class="server-info-card wide server-summary-card server-expandable" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><div class="server-card-open">放大</div><h4>资源概览</h4><div class="server-summary-grid">' +
-        '<div><span>CPU</span><b>' + cpu.toFixed(1) + '%</b><small>' + esc(d.cpuCores || '?') + ' 核</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
-        '<div><span>内存</span><b>' + memPct + '%</b><small>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '</small>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
-        '<div><span>磁盘</span><b>' + diskPct + '%</b><small>剩余 ' + fmtB(d.diskFree) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
-        '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
-        '</div><div class="server-info-mini">CPU：用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div></div>' +
         '<div class="server-info-card wide server-facts-card server-expandable" onclick="openServerInfoDetailModal(\'facts\')" title="点击放大查看基础信息"><div class="server-card-open">放大</div><h4>基础信息</h4><div class="server-info-facts server-info-facts-main">' +
-        '<div><span>CPU</span><b>' + esc(d.cpuModel || '-') + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · 当前 ' + cpu.toFixed(1) + '%</small></div>' +
-        '<div><span>内存</span><b>' + fmtB(d.memUsed) + ' / ' + fmtB(d.memTotal) + '</b><small>使用率 ' + memPct + '%</small></div>' +
-        '<div><span>硬盘</span><b>' + fmtB(d.diskUsed) + ' / ' + fmtB(d.diskTotal) + '</b><small>剩余 ' + fmtB(d.diskFree) + ' · ' + diskPct + '%</small></div>' +
+        '<div><span>CPU</span><b>' + esc(d.cpuModel || '-') + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · 剩余 ' + cpuRemainPct + '</small></div>' +
+        '<div><span>内存</span><b>' + fmtB(memAvail) + ' / ' + fmtB(d.memTotal) + '</b><small>剩余 ' + memRemainPct + '</small></div>' +
+        '<div><span>硬盘</span><b>' + fmtB(d.diskFree) + ' / ' + fmtB(d.diskTotal) + '</b><small>剩余 ' + diskRemainPct + '</small></div>' +
         '<div><span>操作系统</span><b>' + esc(d.os || '-') + '</b></div>' +
         '<div><span>运行时间</span><b>' + esc(fmtUptimeLong(d.uptime)) + '</b></div>' +
-        '<div class="facts-two"><span>架构</span><b>' + esc(d.arch || '-') + '</b><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
+        '<div><span>架构</span><b>' + esc(d.arch || '-') + '</b></div>' +
+        '<div><span>内核</span><b>' + esc(d.kernelVersion || '-') + '</b></div>' +
         '<div><span>负载</span><b>' + esc(d.load || '0 0 0') + '</b></div>' +
         '</div></div>' +
+        '<div class="server-info-card wide server-summary-card server-expandable" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><div class="server-card-open">放大</div><h4>资源概览</h4><div class="server-summary-grid">' +
+        '<div><span>CPU</span><b>' + cpuRemainPct + '</b><small>剩余 · 已用 ' + cpu.toFixed(1) + '%</small>' + resourceSparklineHtml(session, 'cpu', 100, 'cpu') + '</div>' +
+        '<div><span>内存</span><b>' + memRemainPct + '</b><small>剩余 ' + fmtB(memAvail) + ' / ' + fmtB(d.memTotal) + '</small>' + resourceSparklineHtml(session, 'mem', 100, 'mem') + '</div>' +
+        '<div><span>磁盘</span><b>' + diskRemainPct + '</b><small>剩余 ' + fmtB(d.diskFree) + ' / ' + fmtB(d.diskTotal) + '</small>' + resourceSparklineHtml(session, 'disk', 100, 'disk') + '</div>' +
+        '<div><span>连接</span><b>' + esc(connTotal) + '</b><small>TCP ' + esc(d.tcpCount || '0') + ' · UDP ' + esc(d.udpCount || '0') + '</small>' + resourceSparklineHtml(session, 'conn', 0, 'conn') + '</div>' +
+        '</div><div class="server-info-mini">CPU：用户 ' + esc(cb.user || '0') + '% · 系统 ' + esc(cb.system || '0') + '% · IO ' + esc(cb.iowait || '0') + '%</div></div>' +
         '<div class="server-info-card wide network-card server-expandable" onclick="openServerInfoDetailModal(\'network\')" title="点击放大查看网络"><div class="server-card-open">放大</div><div class="server-info-card-head network-head"><h4>网络</h4><div class="server-iface-control">' + netUnitToggle + (ifaces.length > 1 ? '<select class="server-iface-select" onclick="event.stopPropagation()" onchange="changeServerInfoIface(this.value)">' + ifaceOptions + '</select>' : '<span class="server-iface-chip">' + esc(ifaceName) + '</span>') + '</div></div>' +
         '<div class="server-net-pair"><div class="net-stat rx"><span>接收速度</span><b>↓ ' + fmtNetRate(rxRate) + '</b><small>' + fmtNetRateAlt(rxRate) + '</small></div><div class="net-stat tx"><span>发送速度</span><b>↑ ' + fmtNetRate(txRate) + '</b><small>' + fmtNetRateAlt(txRate) + '</small></div><div><span>总接收</span><b>' + fmtB(rxTotal) + '</b></div><div><span>总发送</span><b>' + fmtB(txTotal) + '</b></div></div>' + networkChartHtml(session, ifaceName, SERVER_INFO_CHART_MINUTES) + '</div>' +
         '<div class="server-info-card wide server-priority-card server-expandable" onclick="openServerInfoDetailModal(\'processes\')" title="点击放大查看进程"><div class="server-card-open">放大</div><h4>进程</h4><div class="server-table-wrap"><table class="server-table"><thead><tr><th>PID</th><th>用户</th><th>内存</th><th>CPU</th><th>命令</th></tr></thead><tbody>' + procRows + '</tbody></table></div></div>' +

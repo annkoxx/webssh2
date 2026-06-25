@@ -48,7 +48,7 @@ func SysInfo(c *gin.Context) *ResponseBody {
 		`echo "===HOSTNAME==="`,
 		`hostname 2>/dev/null || echo unknown`,
 		`echo "===CPU_MODEL==="`,
-		`grep -m1 'model name' /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || sysctl -n machdep.cpu.brand_string 2>/dev/null || echo unknown`,
+		`cpu_model=$( (awk -F: '/^(model name|Hardware|Processor|cpu model|Model)[[:space:]]*:/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); if($2!=""){print $2; found=1; exit}} END{if(!found) exit 1}' /proc/cpuinfo || sysctl -n machdep.cpu.brand_string || lscpu | awk -F: '/Model name|Architecture/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); if($2!=""){print $2; exit}}') 2>/dev/null | head -n1 ); if [ -n "$cpu_model" ]; then echo "$cpu_model"; else arch=$(uname -m 2>/dev/null); case "$arch" in aarch64|arm64|armv*) echo "ARM $arch";; *) echo unknown;; esac; fi`,
 		`echo "===CPU_CORES==="`,
 		`nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1`,
 		`echo "===MEM==="`,
