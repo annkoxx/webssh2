@@ -1442,10 +1442,10 @@ function renderServerInfo(d, session) {
     body.innerHTML =
         '<div class="server-info-quicklook">' +
         '<div class="server-info-quick-grid">' +
-        '<div><span>CPU</span><b title="' + escAttr(cpuQuick) + '">' + esc(cpuQuick) + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · ' + esc(d.arch || '-') + '</small></div>' +
-        '<div><span>内存</span><b>' + fmtB(d.memTotal) + '</b><small>已用 ' + fmtB(d.memUsed) + '</small></div>' +
-        '<div><span>硬盘</span><b>' + fmtB(d.diskTotal) + '</b><small>剩余 ' + fmtB(d.diskFree) + '</small></div>' +
-        '<div><span>操作系统</span><b title="' + escAttr(d.os || '-') + '">' + esc(d.os || '-') + '</b><small>' + esc(d.kernelVersion || '-') + '</small></div>' +
+        '<button type="button" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><span>CPU</span><b title="' + escAttr(cpuQuick) + '">' + esc(cpuQuick) + '</b><small>' + esc(d.cpuCores || '?') + ' 核 · ' + esc(d.arch || '-') + '</small></button>' +
+        '<button type="button" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><span>内存</span><b>' + fmtB(d.memTotal) + '</b><small>已用 ' + fmtB(d.memUsed) + '</small></button>' +
+        '<button type="button" onclick="openServerInfoDetailModal(\'summary\')" title="点击放大查看资源概览"><span>硬盘</span><b>' + fmtB(d.diskTotal) + '</b><small>剩余 ' + fmtB(d.diskFree) + '</small></button>' +
+        '<button type="button" onclick="openServerInfoDetailModal(\'facts\')" title="点击放大查看基础信息"><span>操作系统</span><b title="' + escAttr(d.os || '-') + '">' + esc(d.os || '-') + '</b><small>' + esc(d.kernelVersion || '-') + '</small></button>' +
         '</div>' +
         '<div class="server-info-live"><span></span>每 ' + getServerInfoRefreshSeconds() + ' 秒刷新</div>' +
         '</div>' +
@@ -2035,7 +2035,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.31');
+    var current = clean(data.currentVersion || data.current, '0.5.32');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
