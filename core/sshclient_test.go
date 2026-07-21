@@ -1,0 +1,71 @@
+package core
+
+import (
+	"net"
+	"strconv"
+	"testing"
+)
+
+func TestNormalizeHostPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		port     int
+		wantHost string
+		wantPort int
+	}{
+		{
+			name:     "bare IPv6",
+			input:    "2603:c021:8012:ef00:0:dd95:ca1:7387",
+			port:     22,
+			wantHost: "2603:c021:8012:ef00:0:dd95:ca1:7387",
+			wantPort: 22,
+		},
+		{
+			name:     "bracketed IPv6",
+			input:    "[2603:c021:8012:ef00:0:dd95:ca1:7387]",
+			port:     22,
+			wantHost: "2603:c021:8012:ef00:0:dd95:ca1:7387",
+			wantPort: 22,
+		},
+		{
+			name:     "bracketed IPv6 with port",
+			input:    "[2603:c030:304:8200::1234]:2222",
+			port:     22,
+			wantHost: "2603:c030:304:8200::1234",
+			wantPort: 2222,
+		},
+		{
+			name:     "IPv4 with port",
+			input:    "192.168.1.100:2200",
+			port:     22,
+			wantHost: "192.168.1.100",
+			wantPort: 2200,
+		},
+		{
+			name:     "hostname",
+			input:    "ssh.example.com",
+			port:     2222,
+			wantHost: "ssh.example.com",
+			wantPort: 2222,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host, port := normalizeHostPort(tt.input, tt.port, 22)
+			if host != tt.wantHost || port != tt.wantPort {
+				t.Fatalf("normalizeHostPort(%q, %d) = (%q, %d), want (%q, %d)", tt.input, tt.port, host, port, tt.wantHost, tt.wantPort)
+			}
+		})
+	}
+}
+
+func TestIPv6DialAddressUsesBrackets(t *testing.T) {
+	host, port := normalizeHostPort("2603:c021:8012:ef00:0:dd95:ca1:7387", 22, 22)
+	got := net.JoinHostPort(host, strconv.Itoa(port))
+	want := "[2603:c021:8012:ef00:0:dd95:ca1:7387]:22"
+	if got != want {
+		t.Fatalf("IPv6 dial address = %q, want %q", got, want)
+	}
+}

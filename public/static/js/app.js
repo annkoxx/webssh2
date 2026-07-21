@@ -216,6 +216,23 @@ function parseHostPortInput(host, port) {
     return out;
 }
 
+function isIPv6Host(host) {
+    return String(host || '').indexOf(':') !== -1;
+}
+
+// The form accepts a bare IPv6 literal, while the UI displays the canonical
+// bracketed form. The backend keeps the host unbracketed and uses
+// net.JoinHostPort, which produces [ipv6]:port for the actual SSH dial.
+function formatHostForInput(host) {
+    host = String(host || '').trim();
+    if (!host || !isIPv6Host(host) || /^\[[^\]]+\]$/.test(host)) return host;
+    return '[' + host + ']';
+}
+
+function formatHostPort(host, port) {
+    return formatHostForInput(host) + ':' + normalizePortValue(port, 22);
+}
+
 function safeDecodeURIComponent(value) {
     value = String(value || '');
     try { return decodeURIComponent(value); } catch (e) { return value; }
@@ -343,7 +360,7 @@ function renderTabs() {
     bar.innerHTML = sessions.map(function (s, i) {
         var cls = i === activeIdx ? 'ssh-tab active' : 'ssh-tab';
         return '<div class="' + cls + '" onclick="switchTab(' + i + ',true)">' +
-            '<span class="tab-main"><span class="tab-ip" ondblclick="event.stopPropagation();copyIP(sessions[' + i + '].hostname)" title="单击切换标签，双击复制 IP">' + esc(s.hostname) + '</span>' +
+            '<span class="tab-main"><span class="tab-ip" ondblclick="event.stopPropagation();copyIP(sessions[' + i + '].hostname)" title="单击切换标签，双击复制 IP">' + esc(formatHostForInput(s.hostname)) + '</span>' +
             '<button class="tab-info" onclick="event.stopPropagation();openServerInfoModal(' + i + ')" title="服务器详情">' +
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="10" x2="12" y2="16"/><circle cx="12" cy="7" r="1"/></svg></button></span>' +
             '<button class="tab-close" onclick="event.stopPropagation();closeTab(' + i + ')">' +
@@ -434,12 +451,12 @@ function showSSHAuthRetryModal(session) {
     if (!session || !session.authRetry) return;
     var modal = document.getElementById('sshAuthRetryModal');
     if (!modal) return;
-    document.getElementById('retryHost').value = session.hostname || '';
+    document.getElementById('retryHost').value = formatHostForInput(session.hostname || '');
     document.getElementById('retryPort').value = session.port || 22;
     document.getElementById('retryUser').value = session.username || 'root';
     document.getElementById('retryPass').value = '';
     var hint = document.getElementById('sshAuthRetryHint');
-    if (hint) hint.textContent = '密码认证失败，请检查并修改 ' + (session.username || 'root') + '@' + (session.hostname || '-') + ':' + (session.port || 22) + ' 的登录信息。';
+    if (hint) hint.textContent = '密码认证失败，请检查并修改 ' + (session.username || 'root') + '@' + formatHostPort(session.hostname || '-', session.port || 22) + ' 的登录信息。';
     setSSHAuthRetryError(session.authRetry.error || '请修改正确的密码后重新连接。');
     modal.classList.add('show');
     setTimeout(function () {
@@ -477,12 +494,15 @@ function handleSSHAuthFailure(session, rawMessage) {
 function submitSSHAuthRetry() {
     var s = getActiveSSHAuthRetrySession();
     if (!s) return;
-    var host = document.getElementById('retryHost').value.trim();
-    var port = parseInt(document.getElementById('retryPort').value, 10) || 22;
+    var hp = parseHostPortInput(document.getElementById('retryHost').value, document.getElementById('retryPort').value);
+    var host = hp.host;
+    var port = hp.port;
     var user = document.getElementById('retryUser').value.trim() || 'root';
     var pass = document.getElementById('retryPass').value;
     if (!host) { setSSHAuthRetryError('请填写主机地址。'); return; }
     if (!pass) { setSSHAuthRetryError('请输入正确的密码。'); return; }
+    document.getElementById('retryHost').value = formatHostForInput(host);
+    document.getElementById('retryPort').value = port;
     if (s.ws && (s.ws.readyState === 0 || s.ws.readyState === 1)) {
         try { s.ws.close(); } catch (e) { }
     }
@@ -572,7 +592,7 @@ function connectFromLogin() {
     var h = hp.host;
     var p = hp.port;
     var u = document.getElementById('username').value.trim() || 'root';
-    document.getElementById('hostname').value = h;
+    document.getElementById('hostname').value = formatHostForInput(h);
     document.getElementById('port').value = p;
 
     var session = createSession(h, p, u, sshInfo, { authType: authType });
@@ -682,7 +702,7 @@ function addNewTab() {
     var u = document.getElementById('newTabUser').value.trim() || 'root';
     var pw = document.getElementById('newTabPass').value;
     if (!h) { showToast('请输入主机地址', 'error'); return; }
-    document.getElementById('newTabHost').value = h;
+    document.getElementById('newTabHost').value = formatHostForInput(h);
     document.getElementById('newTabPort').value = p;
     var sshInfo = buildSSHInfoDirect(h, p, u, pw);
     var session = createSession(h, p, u, sshInfo, { authType: 'password' });
@@ -2193,7 +2213,7 @@ function setVersionLabels(data) {
         v = (v == null ? '' : String(v)).trim();
         return /^\d+(?:\.\d+){1,3}$/.test(v) ? v : fallback;
     }
-    var current = clean(data.currentVersion || data.current, '0.5.38');
+    var current = clean(data.currentVersion || data.current, '0.5.39');
     var latest = clean(data.latestVersion || data.latest, current);
     if (cur) cur.textContent = current;
     if (remote) remote.textContent = latest;
@@ -2319,8 +2339,11 @@ function renderConnBookmarks() {
 }
 
 function saveConnBookmark() {
-    var h = document.getElementById('hostname').value.trim(), u = document.getElementById('username').value.trim() || 'root', p = parseInt(document.getElementById('port').value) || 22;
+    var hp = parseHostPortInput(document.getElementById('hostname').value, document.getElementById('port').value);
+    var h = hp.host, p = hp.port, u = document.getElementById('username').value.trim() || 'root';
     if (!h) { showToast('请先填写主机', 'error'); return; }
+    document.getElementById('hostname').value = formatHostForInput(h);
+    document.getElementById('port').value = p;
     var at = document.querySelector('.auth-tab.active').dataset.tab;
     var bm = { hostname: h, port: p, username: u, authType: at };
     if (at === 'password') bm.password = document.getElementById('password').value;
@@ -2331,8 +2354,9 @@ function saveConnBookmark() {
 
 function applyConn(i) {
     var b = loadBM(CBK)[i]; if (!b) return;
-    document.getElementById('hostname').value = b.hostname || '';
-    document.getElementById('port').value = b.port || 22;
+    var hp = parseHostPortInput(b.hostname, b.port);
+    document.getElementById('hostname').value = formatHostForInput(hp.host);
+    document.getElementById('port').value = hp.port;
     document.getElementById('username').value = b.username || 'root';
     if (b.authType === 'key') switchAuthTab('key');
     else { switchAuthTab('password'); if (b.password) document.getElementById('password').value = b.password; }
@@ -3558,8 +3582,8 @@ function isPrivateKey(s) {
     return decoded.indexOf('-----BEGIN') === 0 || decoded.indexOf('-----BEGIN') !== -1 || decoded.length > 200;
 }
 
-function parseUrlLogin() {
-    var path = location.pathname;
+function parseUrlLoginPath(pathname) {
+    var path = String(pathname || '');
     if (!path || path === '/') return null;
     path = path.replace(/^\/+/, '').replace(/\/+$/, '');
     if (!path) return null;
@@ -3616,12 +3640,16 @@ function parseUrlLogin() {
     return { host: host, port: port || 22, user: user || 'root', pass: pass || '', authType: authType };
 }
 
+function parseUrlLogin() {
+    return parseUrlLoginPath(location.pathname);
+}
+
 function tryAutoLogin() {
     var info = parseUrlLogin();
     if (!info) return;
 
     // Fill form
-    document.getElementById('hostname').value = info.host;
+    document.getElementById('hostname').value = formatHostForInput(info.host);
     document.getElementById('port').value = info.port;
     document.getElementById('username').value = info.user;
 

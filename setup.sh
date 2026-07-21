@@ -8,6 +8,27 @@ echo "║         WebSSH 部署向导              ║"
 echo "╚══════════════════════════════════════╝"
 echo ""
 
+# 检测宿主机是否同时具有全局 IPv6 地址和默认 IPv6 路由。
+# 优先使用 iproute2；精简 Linux 系统则读取 /proc 作为回退。
+has_usable_ipv6() {
+    if command -v ip >/dev/null 2>&1; then
+        if ip -6 addr show scope global 2>/dev/null | grep -q 'inet6 ' && \
+           ip -6 route show default 2>/dev/null | grep -q '^default'; then
+            return 0
+        fi
+        return 1
+    fi
+
+    if [ -r /proc/net/if_inet6 ] && [ -r /proc/net/ipv6_route ]; then
+        if awk '$4 == "00" && $6 != "lo" { found = 1 } END { exit !found }' /proc/net/if_inet6 2>/dev/null && \
+           awk '$1 == "00000000000000000000000000000000" && $2 == "00000000" && $10 != "lo" { found = 1 } END { exit !found }' /proc/net/ipv6_route 2>/dev/null; then
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
 # ── 1. 端口 ──────────────────────────────────────────────────────────────────
 printf "服务端口 [默认 8008，直接回车跳过]: "
 read PORT_INPUT
@@ -112,6 +133,17 @@ else
     echo "🔐 管理员账号: ${ADMIN_USER}"
 fi
 echo ""
+
+# ── IPv6 网络检测 ─────────────────────────────────────────────────────────────
+# 有可用 IPv6 时保持安静；只有未检测到 IPv6 时才提示并等待确认。
+if ! has_usable_ipv6; then
+    echo "⚠️  本机没有检测到可用的 IPv6 网络。"
+    echo "   IPv6 服务器将不能通过本机直接连接 SSH。"
+    echo "   如果需要支持 IPv6，请更换支持 IPv6 的服务器。"
+    printf "按回车继续..."
+    read IPV6_CONTINUE
+    echo ""
+fi
 
 # ── 启动 ──────────────────────────────────────────────────────────────────────
 echo "🚀 正在启动 WebSSH..."

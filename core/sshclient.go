@@ -135,6 +135,7 @@ func (sclient *SSHClient) GenerateClient() error {
 	if sclient.Port == 0 {
 		sclient.Port = 22
 	}
+	// JoinHostPort automatically converts a bare IPv6 literal into [IPv6]:port.
 	addr = net.JoinHostPort(sclient.Hostname, strconv.Itoa(sclient.Port))
 
 	if sclient.ProxyHost != "" {
