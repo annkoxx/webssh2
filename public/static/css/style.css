@@ -139,6 +139,7 @@ textarea{padding:11px 12px;resize:vertical;min-height:72px;font-family:'WebSSH J
 .drawer-add:hover{border-color:var(--c1);color:var(--c1);background:rgba(0,212,255,.05)}
 
 .bm-item{display:flex;align-items:center;gap:8px;padding:10px 12px;max-height:86px;border-radius:var(--rx);background:rgba(255,255,255,.03);border:1px solid transparent;cursor:pointer;transition:all var(--tr);animation:fi .3s ease}
+.script-drawer .bm-item{animation:none}
 .bm-item:hover{background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.15);transform:translateX(-2px)}
 .bm-item.removing{opacity:0;max-height:0;padding-top:0;padding-bottom:0;margin-top:-4px;margin-bottom:-4px;overflow:hidden;pointer-events:none;transform:translateX(12px) scale(.98);transition:opacity .16s ease,max-height .16s ease,padding .16s ease,margin .16s ease,transform .16s ease}
 .bm-item-info{flex:1;min-width:0}

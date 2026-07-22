@@ -146,6 +146,8 @@ document.addEventListener('keydown', function (e) {
         if (serverInfoDetailModal && serverInfoDetailModal.classList.contains('show')) { hideServerInfoDetailModal(); return; }
         var sshAuthRetryModal = document.getElementById('sshAuthRetryModal');
         if (sshAuthRetryModal && sshAuthRetryModal.classList.contains('show')) { hideSSHAuthRetryModal(true); return; }
+        var scriptDeleteModal = document.getElementById('scriptDeleteModal');
+        if (scriptDeleteModal && scriptDeleteModal.classList.contains('show')) { hideScriptDeleteModal(); return; }
         var categoryDeleteModal = document.getElementById('categoryDeleteModal');
         if (categoryDeleteModal && categoryDeleteModal.classList.contains('show')) { hideCategoryDeleteModal(); return; }
         var scriptManagerModal = document.getElementById('scriptManagerModal');
@@ -169,6 +171,10 @@ document.addEventListener('click', function (e) {
     var serverInfoDetailModal = document.getElementById('serverInfoDetailModal');
     if (serverInfoDetailModal && serverInfoDetailModal.classList.contains('show') && e.target === serverInfoDetailModal) {
         hideServerInfoDetailModal();
+    }
+    var scriptDeleteModal = document.getElementById('scriptDeleteModal');
+    if (scriptDeleteModal && scriptDeleteModal.classList.contains('show') && e.target === scriptDeleteModal) {
+        hideScriptDeleteModal();
     }
     var categoryDeleteModal = document.getElementById('categoryDeleteModal');
     if (categoryDeleteModal && categoryDeleteModal.classList.contains('show') && e.target === categoryDeleteModal) {
@@ -1714,6 +1720,7 @@ var managedAccountPageSize = 5;
 var categoryManagerPage = 1;
 var categoryManagerPageSize = 5;
 var pendingDeleteCategoryId = '';
+var pendingDeleteScriptIndex = -1;
 var scriptManagerPreserveDrawer = false;
 var scriptCategoryRenderFrame = 0;
 var editingManagedAccount = null;
@@ -2794,6 +2801,13 @@ function bookmarkMatchesActiveCategory(b) {
     return b.categoryId === activeScriptCategory;
 }
 
+function replaceScriptBookmarkListHtml(list, html) {
+    var previousScrollTop = list.scrollTop;
+    list.innerHTML = html;
+    var maxScrollTop = Math.max(0, list.scrollHeight - list.clientHeight);
+    list.scrollTop = Math.min(previousScrollTop, maxScrollTop);
+}
+
 function renderScriptBookmarks(searchOnly) {
     var l = document.getElementById('scriptBookmarkList');
     if (!l) return;
@@ -2821,14 +2835,14 @@ function renderScriptBookmarks(searchOnly) {
             html += bookmarkMatches.map(function (entry) { return scriptBookmarkItemHtml(bms[entry.index], entry.index, categoryMap); }).join('');
         }
         if (!matches.length) html = '<div class="bm-empty script-search-empty"><b>🔍</b><span>没有找到匹配脚本</span><small>可搜索名称、完整命令或命令片段</small></div>';
-        l.innerHTML = html;
+        replaceScriptBookmarkListHtml(l, html);
         return;
     }
 
     if (showPresets && !activeScriptCategory) {
         html = '<div class="bm-item preset-back" onclick="event.stopPropagation();showPresets=false;renderScriptBookmarks()"><div class="bm-item-info"><div class="bm-item-name" style="color:var(--c1)">‹ 返回我的脚本</div></div></div>';
         html += PRESET_SCRIPTS.map(function (p, i) { return presetScriptItemHtml(p, i); }).join('');
-        l.innerHTML = html;
+        replaceScriptBookmarkListHtml(l, html);
         return;
     }
 
@@ -2836,7 +2850,7 @@ function renderScriptBookmarks(searchOnly) {
     var visible = bms.map(function (b, i) { return { bookmark: b, index: i }; }).filter(function (entry) { return bookmarkMatchesActiveCategory(entry.bookmark); });
     if (visible.length) html += visible.map(function (entry) { return scriptBookmarkItemHtml(entry.bookmark, entry.index, categoryMap); }).join('');
     else html += '<div class="bm-empty">' + (activeScriptCategory ? '此分类暂无脚本' : '暂无自定义脚本') + '</div>';
-    l.innerHTML = html;
+    replaceScriptBookmarkListHtml(l, html);
 }
 
 function mergeScriptBookmarksIncremental(incoming, updatedAt, replaceExisting) {
@@ -2977,13 +2991,35 @@ function runScript(i) {
 
 function delScript(i) {
     var bms = loadSortedScriptBookmarks();
-    if (!bms[i]) return;
+    var bookmark = bms[i];
+    if (!bookmark) return;
+    pendingDeleteScriptIndex = i;
+    var title = document.getElementById('scriptDeleteTitle');
+    var description = document.getElementById('scriptDeleteDescription');
+    if (title) title.textContent = '确定删除脚本“' + (bookmark.name || '未命名脚本') + '”吗？';
+    if (description) description.textContent = '删除后无法恢复，脚本命令也会一并移除。';
+    var modal = document.getElementById('scriptDeleteModal');
+    if (modal) modal.classList.add('show');
+}
+
+function hideScriptDeleteModal() {
+    var modal = document.getElementById('scriptDeleteModal');
+    if (modal) modal.classList.remove('show');
+    pendingDeleteScriptIndex = -1;
+}
+
+function confirmDelScript() {
+    var i = pendingDeleteScriptIndex;
+    if (i < 0) return;
+    var bms = loadSortedScriptBookmarks();
+    if (!bms[i]) { hideScriptDeleteModal(); return; }
     bms.splice(i, 1);
     saveBM(SBK, bms);
+    hideScriptDeleteModal();
     renderScriptBookmarks();
     updateScriptManagerSummary();
     syncLocalScriptsIfLogged();
-    showToast('已删除', 'info');
+    showToast('脚本已删除', 'info');
 }
 
 function openScriptManager(tab) {
