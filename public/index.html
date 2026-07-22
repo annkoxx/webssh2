@@ -714,9 +714,10 @@
                     <b id="categoryDeleteTitle">确定删除这个分类吗？</b>
                     <p id="categoryDeleteDescription">分类下的脚本不会删除。</p>
                 </div>
-                <div class="edit-actions category-delete-actions">
+                <div class="edit-actions category-delete-actions category-choice-actions">
+                    <button class="drawer-add primary-action" type="button" onclick="confirmDeleteScriptCategory('move')">脚本移到全部并删除分类</button>
+                    <button class="drawer-add danger-confirm" type="button" onclick="confirmDeleteScriptCategory('delete')">连同脚本一起删除</button>
                     <button class="drawer-add" type="button" onclick="hideCategoryDeleteModal()">取消</button>
-                    <button class="drawer-add danger-confirm" type="button" onclick="confirmDeleteScriptCategory()">删除分类</button>
                 </div>
             </div>
         </div>

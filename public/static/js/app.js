@@ -1722,7 +1722,6 @@ var categoryManagerPageSize = 5;
 var pendingDeleteCategoryId = '';
 var pendingDeleteScriptIndex = -1;
 var scriptManagerPreserveDrawer = false;
-var scriptCategoryRenderFrame = 0;
 var editingManagedAccount = null;
 var versionUpdatePollTimer = null;
 
@@ -1806,12 +1805,16 @@ function exportScriptBookmarks() {
     var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' });
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
+    a.dataset.keepScriptDrawer = '1';
+    a.style.display = 'none';
     var stamp = new Date().toISOString().replace(/[:.]/g, '-');
     a.href = url;
     a.download = 'webssh-script-bookmarks-' + stamp + '.json';
+    preserveScriptDrawerAfterCategoryChange();
     document.body.appendChild(a);
     a.click();
     a.remove();
+    preserveScriptDrawerAfterCategoryChange();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
     showToast('导出成功：' + scripts.length + ' 个脚本，' + categories.length + ' 个分类', 'success');
 }
@@ -1819,8 +1822,10 @@ function exportScriptBookmarks() {
 function triggerScriptImport() {
     var input = document.getElementById('scriptImportFile');
     if (!input) { showToast('导入控件未找到', 'error'); return; }
+    preserveScriptDrawerAfterCategoryChange();
     input.value = '';
     input.click();
+    preserveScriptDrawerAfterCategoryChange();
 }
 
 function extractImportedScripts(data) {
@@ -1944,10 +1949,12 @@ function importScriptBookmarks(input) {
             showToast('导入失败：JSON 文件无效', 'error');
         } finally {
             input.value = '';
+            preserveScriptDrawerAfterCategoryChange();
         }
     };
     reader.onerror = function () {
         input.value = '';
+        preserveScriptDrawerAfterCategoryChange();
         showToast('导入失败：无法读取文件', 'error');
     };
     reader.readAsText(file, 'utf-8');
@@ -3093,14 +3100,20 @@ function preserveScriptDrawerAfterCategoryChange() {
     if (drawer) drawer.classList.add('open');
 }
 
-function scheduleScriptCategorySidebarRefresh() {
-    preserveScriptDrawerAfterCategoryChange();
-    if (scriptCategoryRenderFrame) cancelAnimationFrame(scriptCategoryRenderFrame);
-    scriptCategoryRenderFrame = requestAnimationFrame(function () {
-        scriptCategoryRenderFrame = 0;
-        renderScriptBookmarks();
-        preserveScriptDrawerAfterCategoryChange();
+function updateVisibleScriptCategoryBadges(categoryId, category) {
+    document.querySelectorAll('#scriptBookmarkList .script-category-badge').forEach(function (badge) {
+        if (badge.dataset.categoryId !== categoryId) return;
+        if (category) {
+            badge.textContent = category.emoji;
+            badge.title = '分类：' + category.name;
+            return;
+        }
+        badge.dataset.categoryId = '__uncategorized__';
+        badge.classList.add('uncategorized');
+        badge.textContent = '▫️';
+        badge.title = '未分类';
     });
+    preserveScriptDrawerAfterCategoryChange();
 }
 
 function saveScriptCategory() {
@@ -3128,7 +3141,8 @@ function saveScriptCategory() {
     renderCategoryManager(categories, bms);
     renderScriptCategoryFilters(categories, bms);
     updateScriptManagerSummary(bms.length, categories.length);
-    scheduleScriptCategorySidebarRefresh();
+    if (editing) updateVisibleScriptCategoryBadges(id, getScriptCategory(id, categories));
+    else preserveScriptDrawerAfterCategoryChange();
     syncLocalScriptsIfLogged();
     showToast(editing ? '分类已更新' : '分类已添加', 'success');
 }
@@ -3149,11 +3163,15 @@ function deleteScriptCategory(id) {
     if (!cat) return;
     var bms = loadSortedScriptBookmarks();
     var count = bms.filter(function (b) { return b.categoryId === id; }).length;
+    if (!count) {
+        performDeleteScriptCategory(id, 'move');
+        return;
+    }
     pendingDeleteCategoryId = id;
     var title = document.getElementById('categoryDeleteTitle');
     var description = document.getElementById('categoryDeleteDescription');
-    if (title) title.textContent = '确定删除分类“' + cat.name + '”吗？';
-    if (description) description.textContent = count ? ('该分类下的 ' + count + ' 个脚本会移至未分类，脚本不会删除。') : '这个分类中没有脚本，删除后无法恢复。';
+    if (title) title.textContent = '分类“' + cat.name + '”下有 ' + count + ' 个脚本';
+    if (description) description.textContent = '请选择将这些脚本移到“全部”，或者连同脚本一起删除。此操作需要确认。';
     var modal = document.getElementById('categoryDeleteModal');
     if (modal) modal.classList.add('show');
     preserveScriptDrawerAfterCategoryChange();
@@ -3166,33 +3184,41 @@ function hideCategoryDeleteModal() {
     preserveScriptDrawerAfterCategoryChange();
 }
 
-function confirmDeleteScriptCategory() {
+function confirmDeleteScriptCategory(action) {
     var id = pendingDeleteCategoryId;
-    if (!id) return;
+    if (!id || (action !== 'move' && action !== 'delete')) return;
+    performDeleteScriptCategory(id, action);
+}
+
+function performDeleteScriptCategory(id, action) {
     var categories = loadScriptCategories();
     var cat = getScriptCategory(id, categories);
     if (!cat) { hideCategoryDeleteModal(); return; }
     var bms = loadSortedScriptBookmarks();
-    var moved = 0;
+    var affected = bms.filter(function (b) { return b.categoryId === id; }).length;
+    var wasActive = activeScriptCategory === id;
     categories = categories.filter(function (item) { return item.id !== id; });
-    bms.forEach(function (b) {
-        if (b.categoryId === id) {
-            delete b.categoryId;
-            moved++;
-        }
-    });
+    if (action === 'delete') {
+        bms = bms.filter(function (b) { return b.categoryId !== id; });
+    } else if (affected) {
+        bms.forEach(function (b) { if (b.categoryId === id) delete b.categoryId; });
+    }
     var now = Date.now();
     saveScriptCategoriesData(categories, now);
-    saveScriptBookmarksData(bms, now);
-    if (activeScriptCategory === id) activeScriptCategory = '';
+    if (affected) saveScriptBookmarksData(bms, now);
+    if (wasActive) activeScriptCategory = '';
     hideCategoryDeleteModal();
     resetCategoryEditor();
     renderCategoryManager(categories, bms);
     renderScriptCategoryFilters(categories, bms);
     updateScriptManagerSummary(bms.length, categories.length);
-    scheduleScriptCategorySidebarRefresh();
+    if (affected && (action === 'delete' || wasActive)) renderScriptBookmarks();
+    else if (affected) updateVisibleScriptCategoryBadges(id, null);
+    else preserveScriptDrawerAfterCategoryChange();
     syncLocalScriptsIfLogged();
-    showToast(moved ? ('分类已删除，' + moved + ' 个脚本已移至未分类') : '分类已删除', 'success');
+    if (!affected) showToast('分类已删除', 'success');
+    else if (action === 'delete') showToast('分类及其 ' + affected + ' 个脚本已删除', 'success');
+    else showToast('分类已删除，' + affected + ' 个脚本已移到全部', 'success');
 }
 
 function updateCategoryPagination(totalPages) {
@@ -3847,7 +3873,7 @@ function initTheme() {
 
 // ==================== Click outside to close drawers ====================
 document.addEventListener('click', function (e) {
-    if (e.target.closest('.modal-overlay')) return;
+    if (e.target.closest('.modal-overlay') || e.target.closest('[data-keep-script-drawer]')) return;
 
     // Close connection bookmark drawer
     var connDrawer = document.getElementById('connDrawer');
